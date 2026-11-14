@@ -93,14 +93,15 @@ async function generate(utterance: string, currentSequence: unknown) {
   const result: unknown = await response.json();
   if (!result || typeof result !== 'object' || !('output' in result) ||
       !Array.isArray(result.output)) throw new Error('Unexpected provider response.');
-  const chunks = result.output.flatMap((item: unknown) => {
+  const chunks: string[] = result.output.flatMap((item: unknown) => {
     if (!item || typeof item !== 'object' || !('content' in item) ||
         !Array.isArray(item.content)) return [];
-    return item.content
-      .filter((part: unknown) => part && typeof part === 'object' &&
-        'type' in part && part.type === 'output_text' && 'text' in part &&
-        typeof part.text === 'string')
-      .map((part: { text: string }) => part.text);
+    return item.content.flatMap((part: unknown) => {
+      if (part && typeof part === 'object' && 'type' in part &&
+          part.type === 'output_text' && 'text' in part &&
+          typeof part.text === 'string') return [part.text];
+      return [];
+    });
   });
   if (chunks.length === 0) throw new Error('Provider returned no structured text.');
   const plan = parseMovementPlan(JSON.parse(chunks.join('')), componentCatalog, `seq_${randomUUID()}`);
