@@ -29,7 +29,7 @@ Rendering dependencies were added to `package.json` and `package-lock.json`: Rea
 
 ## Still required for the milestone
 
-- Test the viewer and finish on the Android 17 presentation phone. This Mac currently has no Android SDK/device runtime available, so desktop render evidence and bundle checks do not establish phone performance.
+- Test performance on the physical Android 17 presentation phone. Native rendering, view controls, region highlighting, and reload have now passed on the local Android 17 emulator through Expo Go; see [Android test results](ANDROID17_TEST_RESULTS.md). This does not establish physical-phone performance or custom development-build compatibility.
 - Choose the first movement family with Derrick, using only represented muscle regions for the demonstration's highlights.
 - Prove that movement deforms acceptably on this rig before registering its components.
 
@@ -38,7 +38,7 @@ No movement has been clinically validated, prescribed, or registered by this vis
 ## Verification of this visual pass
 
 - Lint and app/test TypeScript checks pass.
-- All nine automated tests pass, including real-asset skinning scale, correct region masking, and independent viewport resources.
+- All 11 automated tests pass, including real-asset skinning scale, correct region masking, independent viewport resources, and the Android startup resolution regression checks.
 - Android JavaScript export includes the local GLB and succeeds.
 - Expo Doctor passes all 20 checks.
 - Four desktop WebGL renders using the shared app material compile successfully: neutral front/back and shoulder/upper-back focus. Preview images above are desktop material evidence, not Android screenshots.
