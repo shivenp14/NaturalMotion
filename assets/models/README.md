@@ -1,6 +1,6 @@
 # Anatomy assets
 
-Person 2 owns this directory. No anatomy model has been selected.
+Person 2 owns this directory. The approved initial model is in `heatsy/`; see its `SOURCE.md`, `LICENSE`, and `NOTICE.md` for provenance, coverage, and attribution.
 
 Prefer a free asset; the total asset budget is $25. Confirm rigging, independent region highlighting, phone performance, and license obligations before integrating it.
 

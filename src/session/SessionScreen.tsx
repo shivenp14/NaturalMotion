@@ -31,7 +31,7 @@ export function SessionScreen() {
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
             <Text style={styles.devText}>Session: {phase} · Registered components: {componentCatalog.length}</Text>
-            <Text style={styles.devText}>Anatomy, camera, and voice adapters are not connected.</Text>
+            <Text style={styles.devText}>Anatomy viewing is available. Movement playback, camera, and voice are not connected.</Text>
           </View>
         )}
       </ScrollView>

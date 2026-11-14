@@ -5,12 +5,12 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 ## What is ready
 
 - Expo SDK 58 / React Native 0.88 / React 19 / TypeScript starter with Expo Router.
-- A native landing/session shell and a clearly labeled empty anatomy viewport.
+- A native landing/session shell and a rigged anatomy viewer with graphite finish, view controls, and educational region highlighting.
 - Shared movement, playback, pose, and form-feedback contracts.
 - Runtime sequence validation and feedback freshness helpers with protocol tests.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The movement catalog is intentionally empty.** No clinical movement, anatomy asset, pose engine, microphone capture, or agent provider is implemented yet. The session button stays disabled until those integrations exist. Select the movement family together, then build against the interfaces below.
+**The movement catalog is intentionally empty.** The anatomy asset and visual viewer are integrated; sequence playback, pose estimation, microphone capture, and agent integration are not connected yet. The session button stays disabled until those integrations exist. Select the movement family together, then build against the interfaces below.
 
 ## Quick start
 
@@ -80,7 +80,7 @@ Person 1 coordinates dependency/config/lockfile edits. Person 3 coordinates shar
 - `src/shared/validateSequence.ts`: validate untrusted agent output against registered parameter ranges before playback.
 - `src/shared/formEvents.ts`: reject events from the wrong sequence/step, unsupported checks, and old/future observations. The vision owner must also gate checks by supported phases and validate adapter output.
 - `src/session/SessionProvider.tsx`: `acceptSequence`, `phase`, `sequence`, and `reset`. Extend session coordination here rather than creating disconnected stores.
-- `src/anatomy/AnatomyViewport.tsx`: replace the placeholder using its sequence input and playback callback.
+- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Sequence playback and its reserved callback remain the next integration step; see `docs/ANATOMY_PROGRESS.md`.
 - `src/vision/types.ts`: camera adapter and form-evaluator boundaries.
 - `src/agent/types.ts` / `src/voice/types.ts`: service and audio adapter boundaries.
 
@@ -94,7 +94,7 @@ The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a sup
 4. Register that component, implement the renderer and evaluator, then give the catalog to the agent.
 5. Connect voice, playback, and real observations on the Android phone before expanding coverage.
 
-Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics, camera, and voice packages are intentionally deferred until their actual integration paths are selected.
+Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. The anatomy viewer uses React Three Fiber and Expo GL; camera and voice packages remain deferred until their integration paths are selected.
 
 ## Configuration and secrets
 
@@ -122,6 +122,7 @@ The initial npm audit reports eight moderate dependency findings through `minima
 - [Product brief](docs/PRODUCT_BRIEF.md)
 - [Three-person implementation plan](docs/TEAM_PLAN.md)
 - [Interactive team build timeline](docs/team-build-timeline.html)
+- [Anatomy proof progress](docs/ANATOMY_PROGRESS.md)
 
 Start with one integrated sequence, one highlighted region, and one real form correction. Acceptance is three consecutive complete runs on the presentation phone, including a spoken request that visibly changes a permitted movement parameter.
 
