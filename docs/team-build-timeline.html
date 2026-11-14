@@ -1,0 +1,152 @@
+<div id="hp-team-timeline">
+  <style>
+    #hp-team-timeline { --unit: var(--font-size-base, 14px); color: var(--foreground); display: grid; gap: calc(var(--unit) * 1.25); }
+    #hp-team-timeline .heading { display: grid; gap: calc(var(--unit) * .25); padding-right: 90px; }
+    #hp-team-timeline .axis { position: relative; height: calc(var(--unit) * 1.6); margin-top: calc(var(--unit) * .5); }
+    #hp-team-timeline .axis span { position: absolute; transform: translateX(-50%); color: var(--muted-foreground); white-space: nowrap; }
+    #hp-team-timeline .axis span:first-child { transform: none; }
+    #hp-team-timeline .axis span:last-child { transform: translateX(-100%); }
+    #hp-team-timeline .lanes { display: grid; gap: calc(var(--unit) * 1.5); }
+    #hp-team-timeline .lane { display: grid; gap: calc(var(--unit) * .5); }
+    #hp-team-timeline .owner { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--unit) * .5); font-weight: 500; }
+    #hp-team-timeline .swatch { width: 10px; height: 10px; background: var(--lane-color); flex-shrink: 0; }
+    #hp-team-timeline .track { position: relative; height: 24px; }
+    #hp-team-timeline .segment { position: absolute; top: 0; height: 24px; background: var(--lane-color); opacity: .18; transition: opacity .2s ease; }
+    #hp-team-timeline .segment.active { opacity: .9; }
+    #hp-team-timeline .segment.buffer { background: var(--muted-foreground); }
+    #hp-team-timeline .task { min-height: calc(var(--unit) * 2.5); }
+    #hp-team-timeline .gate { display: grid; gap: calc(var(--unit) * .25); }
+    #hp-team-timeline .gate-label { font-weight: 500; }
+    #hp-team-timeline .foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: calc(var(--unit) * .5); }
+    @media (max-width: 420px) { #hp-team-timeline .minor-tick { display: none; } }
+    @media (prefers-reduced-motion: reduce) { #hp-team-timeline .segment { transition: none; } }
+  </style>
+  <div class="heading">
+    <h2>Three people, one working demo</h2>
+    <span class="text-small text-muted">Proposed 12-hour build · up to 3 hours of buffer</span>
+  </div>
+  <div class="viz-controls">
+    <label class="form-label" for="hp-build-phase">Build phase
+      <select class="form-select" id="hp-build-phase">
+        <option value="0">0–0.5 h · Agree on contracts</option>
+        <option value="1" selected>0.5–2 h · Prove the risky parts</option>
+        <option value="2">2–4 h · Connect the first loop</option>
+        <option value="3">4–7 h · Complete the experience</option>
+        <option value="4">7–10 h · Stabilize and polish</option>
+        <option value="5">10–12 h · Freeze and rehearse</option>
+        <option value="6">12–15 h · Buffer if available</option>
+      </select>
+    </label>
+  </div>
+  <div>
+    <div class="text-small text-muted">Planned hours from implementation start</div>
+    <div class="axis text-small tabular-nums" aria-hidden="true">
+      <span style="left:0%">0</span><span class="minor-tick" style="left:13.333%">2</span><span style="left:26.667%">4</span><span class="minor-tick" style="left:46.667%">7</span><span style="left:66.667%">10</span><span style="left:80%">12</span><span style="left:100%">15 h</span>
+    </div>
+    <div class="lanes" aria-label="Parallel work by team member">
+      <section class="lane" style="--lane-color:var(--viz-series-1,var(--chart-1,var(--blue)))">
+        <div class="owner"><span class="swatch" aria-hidden="true"></span>1 · Mobile + vision</div>
+        <div class="track" data-owner="0" role="img" aria-label="Person 1 planned work across hours 0 to 15"></div>
+        <div class="task" id="hp-task-0">Prove native camera → pose landmarks on the Android phone.</div>
+      </section>
+      <section class="lane" style="--lane-color:var(--viz-series-2,var(--chart-2,var(--green)))">
+        <div class="owner"><span class="swatch" aria-hidden="true"></span>2 · Anatomy + movement</div>
+        <div class="track" data-owner="1" role="img" aria-label="Person 2 planned work across hours 0 to 15"></div>
+        <div class="task" id="hp-task-1">Load one anatomical model, move its rig, and highlight one region.</div>
+      </section>
+      <section class="lane" style="--lane-color:var(--viz-series-3,var(--chart-3,var(--purple)))">
+        <div class="owner"><span class="swatch" aria-hidden="true"></span>3 · Agent + voice + experience</div>
+        <div class="track" data-owner="2" role="img" aria-label="Person 3 planned work across hours 0 to 15"></div>
+        <div class="task" id="hp-task-2">Generate a valid sequence from text; prove the phone audio path.</div>
+      </section>
+    </div>
+  </div>
+  <hr>
+  <div class="gate" aria-live="polite" aria-atomic="true">
+    <span class="gate-label" id="hp-gate-label">By hour 2 · Feasibility checkpoint</span>
+    <span id="hp-gate">Real landmarks + one moving, highlightable model + a valid generated sequence.</span>
+  </div>
+  <div class="foot text-small text-muted"><span>Android first · assets ≤ $25</span><span>Acceptance: 3 consecutive full-flow runs</span></div>
+  <script>
+    (() => {
+      const root = document.getElementById('hp-team-timeline');
+      const control = root.querySelector('#hp-build-phase');
+      const phases = [
+        { start:0, end:.5, label:'Agree on contracts', gateLabel:'By 30 minutes · Shared foundation', gate:'One phone, shared interfaces, sample sequences, and clear file ownership.', tasks:[
+          'Choose the Android phone, set up the build, and coordinate native dependencies.',
+          'Shortlist anatomy assets and define provisional movement capabilities.',
+          'Define sequence, playback, and form-event contracts; sketch the session flow.'
+        ]},
+        { start:.5, end:2, label:'Prove the risky parts', gateLabel:'By hour 2 · Feasibility checkpoint', gate:'Real landmarks + one moving, highlightable model + a valid generated sequence.', tasks:[
+          'Prove native camera → pose landmarks on the Android phone.',
+          'Load one anatomical model, move its rig, and highlight one region.',
+          'Generate a valid sequence from text; prove the phone audio path.'
+        ]},
+        { start:2, end:4, label:'Connect the first loop', gateLabel:'By hour 4 · First integrated loop', gate:'A generated sequence reaches the model; a form event reaches the feedback UI. Identify remaining mocks.', tasks:[
+          'Implement one form check with visibility handling and structured events.',
+          'Play the first parameterized component and emit active-step playback state.',
+          'Connect sequence generation, validation, session state, and the basic interface.'
+        ]},
+        { start:4, end:7, label:'Complete the experience', gateLabel:'By hour 7 · Complete interaction', gate:'Spoken request → anatomical demonstration → real camera correction → recognized adjustment.', tasks:[
+          'Synchronize the form check with movement phases; test graphics, camera, and audio together.',
+          'Improve movement transitions and muscle highlighting on the same model.',
+          'Finish hands-free listening and speaking; explain real form observations.'
+        ]},
+        { start:7, end:10, label:'Stabilize and polish', gateLabel:'By hour 10 · Acceptance checkpoint', gate:'Three consecutive complete runs on the presentation phone, including a visible parameter change.', tasks:[
+          'Stabilize tracking, permissions, camera lifecycle, and combined-device performance.',
+          'Polish lighting, framing, deformation, and phone rendering performance.',
+          'Polish conversation and UI; support a spoken request to modify the sequence.'
+        ]},
+        { start:10, end:12, label:'Freeze and rehearse', gateLabel:'By hour 12 · Submission-ready', gate:'Freeze scope, rehearse the two-minute demonstration, and submit before the actual deadline.', tasks:[
+          'Fix demo blockers and preserve a known-working Android build.',
+          'Make final visual fixes and prepare asset attribution.',
+          'Rehearse the demonstration and finalize the pitch and submission materials.'
+        ]},
+        { start:12, end:15, label:'Buffer if available', gateLabel:'Hours 12–15 · Optional buffer', gate:'Use only time actually remaining. Expand coverage after acceptance and submission readiness.', tasks:[
+          'Resolve unexpected device or integration failures; avoid destabilizing the build.',
+          'Resolve remaining visual failures; add movement coverage only if the demo is ready.',
+          'Resolve remaining voice or service failures; keep the complete flow presentation-ready.'
+        ]}
+      ];
+      const tracks = Array.from(root.querySelectorAll('.track'));
+      tracks.forEach((track, owner) => {
+        phases.forEach((phase, index) => {
+          const mark = document.createElement('span');
+          mark.className = 'segment' + (index === 6 ? ' buffer' : '');
+          mark.style.left = `${phase.start / 15 * 100}%`;
+          mark.style.width = `calc(${(phase.end - phase.start) / 15 * 100}% - ${index === 6 ? 0 : 2}px)`;
+          mark.dataset.phase = String(index);
+          mark.setAttribute('data-tooltip', `${phase.start}–${phase.end} h · ${phase.tasks[owner]}`);
+          mark.setAttribute('aria-hidden', 'true');
+          track.appendChild(mark);
+        });
+      });
+      const phaseFromState = state => {
+        const candidate = state?.privateContent?.phase ?? state?.modelContent?.phase;
+        return Number.isInteger(candidate) && candidate >= 0 && candidate < phases.length ? candidate : 1;
+      };
+      const paint = index => {
+        const phase = phases[index];
+        control.value = String(index);
+        root.querySelectorAll('.segment').forEach(mark => mark.classList.toggle('active', Number(mark.dataset.phase) === index));
+        phase.tasks.forEach((task, owner) => {
+          root.querySelector(`#hp-task-${owner}`).textContent = task;
+          tracks[owner].setAttribute('aria-label', `Person ${owner+1}, selected phase ${phase.start} to ${phase.end} hours: ${task}`);
+        });
+        root.querySelector('#hp-gate-label').textContent = phase.gateLabel;
+        root.querySelector('#hp-gate').textContent = phase.gate;
+      };
+      control.addEventListener('change', () => {
+        const phase = Number(control.value);
+        paint(phase);
+        if (window.openai?.setWidgetState) {
+          window.openai.setWidgetState({modelContent:{phase, phaseLabel:phases[phase].label}, privateContent:{phase}}).catch(() => {});
+        }
+      });
+      window.addEventListener('openai:set_globals', event => {
+        if (event.detail?.globals?.widgetState) paint(phaseFromState(event.detail.globals.widgetState));
+      });
+      paint(phaseFromState(window.openai?.widgetState));
+    })();
+  </script>
+</div>

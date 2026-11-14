@@ -121,6 +121,7 @@ The initial npm audit reports eight moderate dependency findings through `minima
 
 - [Product brief](docs/PRODUCT_BRIEF.md)
 - [Three-person implementation plan](docs/TEAM_PLAN.md)
+- [Interactive team build timeline](docs/team-build-timeline.html)
 
 Start with one integrated sequence, one highlighted region, and one real form correction. Acceptance is three consecutive complete runs on the presentation phone, including a spoken request that visibly changes a permitted movement parameter.
 
