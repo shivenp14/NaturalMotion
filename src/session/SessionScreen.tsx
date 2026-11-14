@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
+import { AgentDevPanel } from './AgentDevPanel';
 import { componentCatalog } from '../shared/catalog';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
@@ -27,6 +28,7 @@ export function SessionScreen() {
           <Text style={styles.buttonText}>Begin session</Text>
         </Pressable>
         <Text style={styles.note}>Sessions will be available when your movement guide is ready.</Text>
+        {__DEV__ && <AgentDevPanel />}
         {__DEV__ && (
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
