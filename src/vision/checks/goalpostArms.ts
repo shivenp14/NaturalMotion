@@ -38,6 +38,9 @@ export function evaluateGoalpostArms(
   thresholds: GoalpostThresholds = DEFAULT_GOALPOST_THRESHOLDS,
 ): FormEvent | null {
   if (playback.status !== 'playing' || !ACTIVE_PHASES.has(playback.phase)) return null;
+  // An observation from before this step or phase started cannot describe what the user is doing
+  // now, so it must not produce feedback.
+  if (observation.observedAt < playback.updatedAt) return null;
 
   const event = {
     sequenceId: playback.sequenceId,

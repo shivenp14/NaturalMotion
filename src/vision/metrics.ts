@@ -1,5 +1,5 @@
 import type { PoseObservation } from '../shared/contracts';
-import { UPPER_BODY_JOINTS, type VisionJointName } from './landmarks';
+import type { VisionJointName } from './landmarks';
 
 /**
  * Every distance is divided by shoulder width, so the numbers do not change when the user sits
@@ -23,23 +23,27 @@ export type UpperBodyMetrics = {
 
 export const DEFAULT_MIN_VISIBILITY = 0.5;
 
-/** Joints that must be present before any form judgment may be issued. */
-export const REQUIRED_GOALPOST_JOINTS: readonly VisionJointName[] = UPPER_BODY_JOINTS.map(
-  (joint) => joint.name,
-);
+/**
+ * Joints the goalpost check actually measures. Verified shoulders, elbows and ears only: requiring
+ * a joint that no measurement reads would turn an occluded wrist into a false `not_observable`.
+ */
+export const REQUIRED_GOALPOST_JOINTS: readonly VisionJointName[] = [
+  'left_shoulder',
+  'right_shoulder',
+  'left_elbow',
+  'right_elbow',
+  'left_ear',
+  'right_ear',
+];
 
 /**
  * Landmarks that are absent, or that the model is not confident about.
  * An empty result means the frame can support a judgment.
  */
-export function unobservableJoints(
-  observation: PoseObservation,
-  required: readonly VisionJointName[] = REQUIRED_GOALPOST_JOINTS,
-  minVisibility: number = DEFAULT_MIN_VISIBILITY,
-): VisionJointName[] {
-  return required.filter((name) => {
+export function unobservableJoints(observation: PoseObservation): VisionJointName[] {
+  return REQUIRED_GOALPOST_JOINTS.filter((name) => {
     const landmark = observation.landmarks[name];
-    return !landmark || !Number.isFinite(landmark.visibility) || landmark.visibility < minVisibility;
+    return !landmark || landmark.visibility < DEFAULT_MIN_VISIBILITY;
   });
 }
 
@@ -64,7 +68,7 @@ export function computeUpperBodyMetrics(observation: PoseObservation): UpperBody
   }
 
   const shoulderWidth = distance(leftShoulder, rightShoulder);
-  if (!Number.isFinite(shoulderWidth) || shoulderWidth <= 0.01) return null;
+  if (shoulderWidth <= 0.01) return null;
 
   const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
   const above = (elbow: Point) => (shoulderMidY - elbow.y) / shoulderWidth;

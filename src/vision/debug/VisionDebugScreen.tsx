@@ -1,13 +1,11 @@
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { PoseFrame } from 'react-native-pose-detection';
 import { theme } from '../../ui/theme';
 import type { FormEvent, PlaybackState, PoseObservation } from '../../shared/contracts';
 import { CameraPoseView } from '../CameraPoseView';
-import { toPoseObservation } from '../landmarks';
-import { computeUpperBodyMetrics, unobservableJoints, type UpperBodyMetrics } from '../metrics';
-import { StatusStabilizer } from '../stability';
+import { toPoseObservation, type PoseFrameLike } from '../landmarks';
+import { StatusStabilizer, type FormStatus } from '../stability';
 import { DEFAULT_GOALPOST_THRESHOLDS, evaluateGoalpostArms } from '../checks/goalpostArms';
 
 /**
@@ -21,8 +19,7 @@ import { DEFAULT_GOALPOST_THRESHOLDS, evaluateGoalpostArms } from '../checks/goa
 type Snapshot = {
   observation: PoseObservation;
   event: FormEvent;
-  metrics: UpperBodyMetrics | null;
-  stableStatus: string | null;
+  stableStatus: FormStatus | null;
 };
 
 const format = (value: number | undefined) =>
@@ -45,7 +42,7 @@ export function VisionDebugScreen() {
   const [error, setError] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
 
-  function handleFrame(frame: PoseFrame) {
+  function handleFrame(frame: PoseFrameLike) {
     const now = Date.now();
     if (playback.current.updatedAt === 0) {
       playback.current = { ...playback.current, updatedAt: now };
@@ -56,12 +53,7 @@ export function VisionDebugScreen() {
     if (!event) return;
 
     const stableStatus = stabilizer.current.update(event.status, event.observedAt);
-    setSnapshot({
-      observation,
-      event,
-      metrics: computeUpperBodyMetrics(observation),
-      stableStatus,
-    });
+    setSnapshot({ observation, event, stableStatus });
   }
 
   function reset() {
@@ -70,7 +62,7 @@ export function VisionDebugScreen() {
     setFrameCount(0);
   }
 
-  const missing = snapshot ? unobservableJoints(snapshot.observation) : [];
+  const measurements = snapshot?.event.measurements;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -107,9 +99,9 @@ export function VisionDebugScreen() {
         {error && <Text style={styles.error}>{error}</Text>}
 
         <Text style={styles.section}>MEASUREMENTS (shoulder widths)</Text>
-        <MetricRow label="elbow above shoulder" value={snapshot?.metrics?.elbowAboveShoulder} />
-        <MetricRow label="elbow spread" value={snapshot?.metrics?.elbowSpread} />
-        <MetricRow label="ear to shoulder" value={snapshot?.metrics?.earToShoulder} />
+        <MetricRow label="elbow above shoulder" value={measurements?.elbowAboveShoulder} />
+        <MetricRow label="elbow spread" value={measurements?.elbowSpread} />
+        <MetricRow label="ear to shoulder" value={measurements?.earToShoulder} />
         <Text style={styles.muted}>
           {`Thresholds: elbow ≥ ${DEFAULT_GOALPOST_THRESHOLDS.minimumElbowAboveShoulder}, ` +
             `spread ≥ ${DEFAULT_GOALPOST_THRESHOLDS.minimumElbowSpread}`}
@@ -119,7 +111,16 @@ export function VisionDebugScreen() {
         <Text style={styles.muted}>
           {snapshot
             ? `raw ${snapshot.event.status} → stable ${snapshot.stableStatus ?? 'pending'}` +
-              ` · missing ${missing.length === 0 ? 'none' : missing.join(', ')}`
+              ` · missing ${measurements?.missingLandmarks ?? 0}`
+            : 'No frame yet'}
+        </Text>
+
+        <Text style={styles.section}>ORIENTATION AND TIME</Text>
+        <Text style={styles.muted}>
+          {snapshot
+            ? `mirrored=${String(snapshot.observation.mirrored)} · observed ${
+                new Date(snapshot.observation.observedAt).toISOString()
+              }`
             : 'No frame yet'}
         </Text>
 
@@ -150,14 +151,14 @@ function MetricRow({ label, value }: { label: string; value: number | undefined 
   );
 }
 
-function statusColor(status: string | null) {
+function statusColor(status: FormStatus | null) {
   if (status === 'aligned') return theme.accent;
   if (status === 'needs_adjustment') return '#e9c9a8';
   if (status === 'not_observable') return '#e9a8a8';
   return theme.border;
 }
 
-function statusLabel(status: string | null) {
+function statusLabel(status: FormStatus | null) {
   if (status === 'aligned') return 'aligned';
   if (status === 'needs_adjustment') return 'needs adjustment';
   if (status === 'not_observable') return 'not observable';

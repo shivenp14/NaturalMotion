@@ -1,12 +1,12 @@
 import type { PoseObservation } from '../shared/contracts';
 
 /**
- * The upper-body joints this track agrees to consume. Names here are the contract names the
- * team reads; `libraryName` is what the pose package calls each joint.
+ * Joints the vision track reports to the rest of the app. These names are the contract names the
+ * team reads; `libraryName` is what the pose package calls each joint, and `index` is its
+ * BlazePose position.
  *
- * Only joints that have an agreed measurement belong in this table. Adding a joint here is a
- * shared-interface change, because `ComponentDefinition.requiredLandmarks` refers to these
- * names.
+ * Reporting a joint is not the same as requiring it. A check declares which of these it needs in
+ * `REQUIRED_GOALPOST_JOINTS`, so an occluded wrist cannot block a shoulder measurement.
  */
 export const UPPER_BODY_JOINTS = [
   { name: 'nose', index: 0, libraryName: 'nose' },
@@ -25,35 +25,9 @@ export type VisionJointName = (typeof UPPER_BODY_JOINTS)[number]['name'];
 /** The parts of a pose-library frame this track reads. Structural, so tests need no native code. */
 export type PoseFrameLike = {
   readonly landmarks: ArrayLike<number>;
-  /** Present when the caller narrowed the buffer; values are library joint names. */
-  readonly selection?: readonly string[];
 };
 
 const STRIDE = 4;
-
-type Landmark = { x: number; y: number; visibility: number };
-
-function offsetFor(frame: PoseFrameLike, joint: (typeof UPPER_BODY_JOINTS)[number]): number | null {
-  if (frame.selection) {
-    const position = frame.selection.indexOf(joint.libraryName);
-    return position === -1 ? null : position * STRIDE;
-  }
-  return joint.index * STRIDE;
-}
-
-function readLandmark(frame: PoseFrameLike, joint: (typeof UPPER_BODY_JOINTS)[number]): Landmark | null {
-  const offset = offsetFor(frame, joint);
-  if (offset === null) return null;
-  const x = frame.landmarks[offset];
-  const y = frame.landmarks[offset + 1];
-  const visibility = frame.landmarks[offset + 3];
-  // An absent joint arrives as a zeroed slot in the buffer, which is indistinguishable from a
-  // real coordinate at the image origin. Visibility is the only honest discriminator, so a joint
-  // the model placed at zero visibility is treated as absent rather than measured.
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-  if (!Number.isFinite(visibility) || visibility <= 0) return null;
-  return { x, y, visibility };
-}
 
 /**
  * Convert one pose-library frame into the shared contract.
@@ -67,8 +41,16 @@ function readLandmark(frame: PoseFrameLike, joint: (typeof UPPER_BODY_JOINTS)[nu
 export function toPoseObservation(frame: PoseFrameLike, observedAt: number): PoseObservation {
   const landmarks: PoseObservation['landmarks'] = {};
   for (const joint of UPPER_BODY_JOINTS) {
-    const landmark = readLandmark(frame, joint);
-    if (landmark) landmarks[joint.name] = landmark;
+    const offset = joint.index * STRIDE;
+    const x = frame.landmarks[offset];
+    const y = frame.landmarks[offset + 1];
+    const visibility = frame.landmarks[offset + 3];
+    // An absent joint arrives as a zeroed slot in the buffer, which is indistinguishable from a
+    // real coordinate at the image origin. Visibility is the only honest discriminator, so a
+    // joint the model placed at zero visibility is treated as absent rather than measured.
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (!Number.isFinite(visibility) || visibility <= 0) continue;
+    landmarks[joint.name] = { x, y, visibility };
   }
   return { observedAt, mirrored: false, landmarks };
 }

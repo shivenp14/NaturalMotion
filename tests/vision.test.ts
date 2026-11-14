@@ -228,3 +228,15 @@ test('the check stays silent outside the movement phase', () => {
   assert.equal(evaluateGoalpostArms(observation, { ...playback, phase: 'preparing' }), null);
   assert.equal(evaluateGoalpostArms(observation, { ...playback, status: 'paused' }), null);
 });
+
+test('an occluded joint that no measurement reads does not block the check', () => {
+  const hiddenNose = { ...cleanGoalpost, nose: { x: 0.5, y: 0.3, visibility: 0.1 } };
+
+  assert.equal(evaluateGoalpostArms(observe(hiddenNose), playback)?.status, 'aligned');
+});
+
+test('an observation from before the step started is ignored', () => {
+  const stale = toPoseObservation(frameFrom(cleanGoalpost), 800);
+
+  assert.equal(evaluateGoalpostArms(stale, playback), null);
+});
