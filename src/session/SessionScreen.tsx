@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
@@ -32,6 +33,13 @@ export function SessionScreen() {
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
             <Text style={styles.devText}>Session: {phase} · Registered components: {componentCatalog.length}</Text>
             <Text style={styles.devText}>Anatomy, camera, and voice adapters are not connected.</Text>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/vision-debug')}
+              style={styles.devButton}
+            >
+              <Text style={styles.devButtonText}>Open camera spike</Text>
+            </Pressable>
           </View>
         )}
       </ScrollView>
@@ -56,4 +64,14 @@ const styles = StyleSheet.create({
   development: { gap: 8, borderTopWidth: 1, borderColor: theme.border, paddingTop: 20 },
   devTitle: { color: theme.accent, fontSize: 10, letterSpacing: 1.5 },
   devText: { color: theme.muted, fontSize: 12, lineHeight: 18 },
+  devButton: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  devButtonText: { color: theme.text, fontSize: 13, fontWeight: '500' },
 });
