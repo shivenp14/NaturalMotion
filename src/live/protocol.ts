@@ -1,12 +1,14 @@
 import type { MovementSequence, PlaybackState } from '../shared/contracts';
+import type { AssessmentPlan } from '../shared/assessment';
 
 export type LiveControl = 'pause_movement' | 'resume_movement' | 'stop_movement';
-export type LiveAction = { type: 'play_sequence'; sequence: MovementSequence } | { type: LiveControl };
+export type LiveAction = { type: 'play_sequence'; sequence: MovementSequence; assessmentPlan?: AssessmentPlan | null } | { type: LiveControl };
 export type FormReport = {
   sequenceId: string; stepIndex: number; observedAt: number;
   status: 'aligned' | 'needs_adjustment' | 'not_observable' | 'unavailable';
   checkId: string | null; message: string;
   mode: 'demonstration' | 'practice';
+  measurements?: Record<string, number | null>;
 };
 export type LiveClientMessage =
   | { type: 'clock'; clientSentAt: number }

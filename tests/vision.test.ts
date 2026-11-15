@@ -77,6 +77,22 @@ test('maps library landmarks into the shared PoseObservation contract', () => {
   ]);
 });
 
+test('world landmarks preserve metric xyz with image visibility and include hips', () => {
+  const frame = frameFrom(cleanGoalpost);
+  const worldLandmarks = new Float32Array(33 * 4);
+  worldLandmarks.set([-0.2, -0.4, 0.1, 0], 11 * 4);
+  frame.landmarks.set([0.42, 0.8, 0, 0.9], 23 * 4);
+  worldLandmarks.set([-0.15, 0, 0.01, 0], 23 * 4);
+  const value = toPoseObservation({ ...frame, worldLandmarks }, 1000);
+  assert.ok(Math.abs(value.worldLandmarks!.left_shoulder.x + 0.2) < 1e-6);
+  assert.ok(Math.abs(value.worldLandmarks!.left_hip.z - 0.01) < 1e-6);
+  assert.ok(value.landmarks.left_hip.visibility > 0.89);
+  frame.landmarks[11 * 4 + 3] = 0;
+  assert.equal(toPoseObservation({ ...frame, worldLandmarks }, 1100).worldLandmarks!.left_shoulder, undefined);
+  worldLandmarks[23 * 4] = NaN;
+  assert.equal(toPoseObservation({ ...frame, worldLandmarks }, 1200).worldLandmarks!.left_hip, undefined);
+});
+
 const observe = (points: Record<string, Point>) => toPoseObservation(frameFrom(points), 1_000);
 
 test('a goalpost hold measures level elbows and a wide spread', () => {

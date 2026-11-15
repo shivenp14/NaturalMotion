@@ -73,6 +73,23 @@ test('phase reports retain entry timestamps and include step changes and pause/r
   assert.equal(events[6].status, 'completed');
 });
 
+test('renderer reports bounded progress and preserves position through pause and resume', () => {
+  const events: PlaybackState[] = [];
+  const report = createPlaybackReporter('progress', state => events.push(state));
+  report(0, 'moving', 'playing', 1000, 0);
+  report(0, 'moving', 'playing', 1100, 0.1);
+  report(0, 'moving', 'playing', 1250, 0.25);
+  report(0, 'moving', 'paused', 1300, 0.3);
+  report(0, 'moving', 'playing', 5000, 0.3);
+  assert.equal(events.length, 4);
+  assert.equal(events.at(-1)?.phaseElapsedSeconds, 0.3);
+  assert.equal(events.at(-1)?.updatedAt, 5000);
+  const program = compileUpperBodySequence(createWallAngelReference(wallAngelDefaults, 'progress'));
+  assert.equal(sampleUpperBodyProgram(program, 1.5).phaseElapsedSeconds, 1.5);
+  assert.equal(sampleUpperBodyProgram(program, 3.5).phaseElapsedSeconds, 0.5);
+  assert.equal(sampleUpperBodyProgram(program, 4.5).phaseElapsedSeconds, 0.5);
+});
+
 test('compiled poses drive the real rig, support one-sided rotation and preserve the untouched side', async () => {
   const bytes = await readFile('assets/models/heatsy/body-smoothed.glb');
   const gltf = await new GLTFLoader().parseAsync(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), '');

@@ -9,7 +9,8 @@ import { createAgentServer } from '../server/http';
 import { anatomyAgentCapabilities } from '../src/anatomy/agentCapabilities';
 import { createWallAngelReference, compileUpperBodySequence } from '../src/anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../src/anatomy/wallAngel';
-import { GOALPOST_ARMS_CHECK_ID } from '../src/vision/checks/goalpostArms';
+import type { LiveAction } from '../src/live/protocol';
+import { validateAssessmentPlan } from '../src/vision/assessmentPlan';
 
 test('live provider tool travels through the real planner validator and requires app acknowledgment', async t => {
   const sequence = createWallAngelReference(wallAngelDefaults, 'live-wire');
@@ -28,7 +29,7 @@ test('live provider tool travels through the real planner validator and requires
         assert.ok('parallel' in step);
         return { targets: step.parallel.map(command => ({ componentId: command.componentId, toDeg: command.parameters.toDeg })),
           durationSeconds: step.durationSeconds, holdSeconds: step.holdSeconds };
-      }), message: '' }) },
+      }), assessment: [{ stepIndex: 1, side: 'left', metric: 'forearm_direction', toleranceDeg: 20 }], message: '' }) },
     ] }] }); },
     connectConversation: async (callbacks: { message(message: ProviderMessage): void }) => {
       receive = callbacks.message;
@@ -67,6 +68,8 @@ test('live provider tool travels through the real planner validator and requires
   receive(Object.assign(new ProviderMessage(), { serverContent: { outputTranscription: { text: 'Still speculative' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } }));
   const action = messages.find(message => message.type === 'action')!;
   assert.ok(compileUpperBodySequence((action.action as { sequence: unknown }).sequence));
+  const movement = action.action as Extract<LiveAction, { type: 'play_sequence' }>;
+  assert.equal(validateAssessmentPlan(movement.assessmentPlan, movement.sequence)?.checks.length, 1);
   socket.send(JSON.stringify({ type: 'applied', commandId: action.commandId, ok: true }));
   await until(() => responses.length === 1);
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true, outputTranscription: { text: 'Watch the movement on screen.' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } }));
@@ -99,18 +102,30 @@ test('live provider tool travels through the real planner validator and requires
     assert.equal(responses.at(-1)!.functionResponses[0].response.ok, true);
   }
   assert.equal(plans, 3);
+  const latest = messages.filter(message => message.type === 'action').at(-1)!.action as typeof movement;
   const now = Date.now();
-  socket.send(JSON.stringify({ type: 'context', sequence, playback: {
-    sequenceId: sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
+  socket.send(JSON.stringify({ type: 'context', sequence: latest.sequence, playback: {
+    sequenceId: latest.sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
   }, practiceStartedAt: now }));
-  socket.send(JSON.stringify({ type: 'form', report: { sequenceId: sequence.id, stepIndex: 1,
-    checkId: GOALPOST_ARMS_CHECK_ID, observedAt: now, status: 'not_observable', message: 'Invented perfect form' } }));
-  // The check identifier comes from the renderer-owned profile, not client wording.
-  await until(() => context.length > 1);
+  const contextsBefore = context.length;
+  socket.send(JSON.stringify({ type: 'form', report: { sequenceId: latest.sequence.id, stepIndex: 1,
+    checkId: 'invented', observedAt: now, status: 'aligned', message: 'Invented perfect form', measurements: { left_forearm_direction: 180 } } }));
+  // Reclassify measurements against the accepted plan; do not speak on one frame.
+  await until(() => context.length > contextsBefore);
   const feedback = context.at(-1)!;
-  assert.equal(feedback.turnComplete, true);
+  assert.equal(feedback.turnComplete, false);
   const text = feedback.turns?.[0]?.parts?.[0]?.text ?? '';
-  assert.match(text, /not_observable/); assert.match(text, /practice/);
+  assert.match(text, /needs_adjustment/); assert.match(text, /practice/); assert.match(text, /left_forearm_direction/);
   assert.doesNotMatch(text, /Invented perfect form/);
+  socket.send(JSON.stringify({ type: 'form', report: { sequenceId: latest.sequence.id, stepIndex: 1,
+    observedAt: now + 1, status: 'aligned', measurements: {} } }));
+  await until(() => context.length > contextsBefore + 1);
+  assert.match(context.at(-1)!.turns?.[0]?.parts?.[0]?.text ?? '', /not_observable/);
   assert.equal(JSON.stringify(messages).includes('mock-openai'), false); assert.equal(JSON.stringify(messages).includes('mock-gemini'), false);
+  const altered = structuredClone(latest.sequence);
+  const step = altered.steps[0]; assert.ok('parallel' in step);
+  step.holdSeconds = step.holdSeconds === 0 ? 0.1 : 0;
+  socket.send(JSON.stringify({ type: 'context', sequence: altered, playback: null }));
+  await until(() => messages.some(message => message.type === 'error'));
+  assert.match(String(messages.at(-1)!.message), /Invalid live-session message/);
 });

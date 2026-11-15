@@ -63,7 +63,7 @@ export function CameraPoseView({
       active={active}
       liveFramesEnabled={Boolean(onCameraImage) && active}
       onCameraImage={onCameraImage}
-      data={{ mode: 'throttled', throttleMs: 100 }}
+      data={{ mode: 'throttled', throttleMs: 100, worldLandmarks: true }}
       overlay={{ color: theme.accent, lineWidth: 3, pointRadius: 4, minVisibility: 0.5 }}
       onPose={onFrame}
       onReady={(event) =>

@@ -43,6 +43,7 @@ export function VisionDebugScreen() {
   const [fps, setFps] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
+  const [worldFrameCount, setWorldFrameCount] = useState(0);
   const [cameraFrameCount, setCameraFrameCount] = useState(0);
   const [cameraGeneration, setCameraGeneration] = useState(0);
   const [trackingLost, setTrackingLost] = useState(false);
@@ -69,6 +70,7 @@ export function VisionDebugScreen() {
       playback.current = { ...playback.current, updatedAt: now };
     }
     const observation = toPoseObservation(frame, now);
+    if (observation.worldLandmarks && Object.keys(observation.worldLandmarks).length >= 8) setWorldFrameCount(count => count + 1);
     const event = evaluateGoalpostArms(observation, playback.current);
     setFrameCount((count) => count + 1);
     if (!event) return;
@@ -83,6 +85,7 @@ export function VisionDebugScreen() {
     lastFrameTimestamp.current = null;
     setSnapshot(null);
     setFrameCount(0);
+    setWorldFrameCount(0);
     setCameraFrameCount(0);
     setTrackingLost(false);
     setReady(null);
@@ -139,6 +142,7 @@ export function VisionDebugScreen() {
           {`Local camera samples: ${cameraFrameCount}`}
         </Text>
         <Text style={styles.muted} testID="vision-pose-status">{`Pose frames: ${frameCount}`}</Text>
+        <Text style={styles.muted} testID="vision-world-status">{`World landmark frames: ${worldFrameCount}`}</Text>
         {frameCount > 0 && <Text style={styles.muted} testID="vision-pose-arrived">Pose landmarks received.</Text>}
 
         {error && <Text style={styles.error}>{error}</Text>}

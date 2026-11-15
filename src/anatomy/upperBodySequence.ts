@@ -79,12 +79,13 @@ export function sampleUpperBodyProgram(program: UpperBodyProgram, elapsedSeconds
       return {
         pose: interpolateUpperBodyPose(segment.from, segment.to, t * t * (3 - 2 * t)),
         stepIndex: index, phase: moving ? segment.phase : 'holding' as const, completed: false,
+        phaseElapsedSeconds: moving ? remaining : remaining - segment.durationSeconds,
       };
     }
     remaining -= total;
   }
   const index = program.segments.length - 1;
-  return { pose: program.segments[index].to, stepIndex: index, phase: 'completed' as const, completed: true };
+  return { pose: program.segments[index].to, stepIndex: index, phase: 'completed' as const, completed: true, phaseElapsedSeconds: 0 };
 }
 
 /** Example composition; the executor contains no exercise-ID dispatch. */
@@ -102,13 +103,14 @@ export function createWallAngelReference(parameters: WallAngelParameters, id: st
   ] };
 }
 
-/** Emits only boundaries/status changes; updatedAt is a phase-entry time. */
+/** Boundaries plus bounded progress updates keep camera targets synchronized after pauses/stalls. */
 export function createPlaybackReporter(sequenceId: string, emit: (state: PlaybackState) => void) {
   let previous = '';
-  return (stepIndex: number, phase: PlaybackState['phase'], status: PlaybackState['status'], now: number) => {
+  let lastEmittedAt = 0;
+  return (stepIndex: number, phase: PlaybackState['phase'], status: PlaybackState['status'], now: number, phaseElapsedSeconds?: number) => {
     const key = `${stepIndex}:${phase}:${status}`;
-    if (key === previous) return;
-    previous = key;
-    emit({ sequenceId, stepIndex, phase, status, updatedAt: now });
+    if (key === previous && (phaseElapsedSeconds === undefined || status !== 'playing' || now - lastEmittedAt < 250)) return;
+    previous = key; lastEmittedAt = now;
+    emit({ sequenceId, stepIndex, phase, status, updatedAt: now, ...(phaseElapsedSeconds !== undefined ? { phaseElapsedSeconds } : {}) });
   };
 }

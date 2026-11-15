@@ -36,7 +36,8 @@ Ordinary CI keeps running `npm run check` and `npm run export:android`; it does 
 | --- | --- |
 | App launch | Selected development client launches; optional Metro cold-load landmark appears. |
 | Local controls and cleanup | Local media starts; an authored validated reference reaches renderer playback; repeated End requests finish cleanup; camera view disappears; media can restart and stop. |
-| Live connection and playback | App connects to configured providers; a generated movement reaches the renderer; pause/resume states are reported; playback completes; the final-goalpost button enters practice while the session stays connected; Clear removes the sequence; End finishes cleanup. |
+| Live connection and playback | App connects to configured providers; a generated movement reaches the renderer; pause/resume states are reported; playback completes; the movement-matched assessment waits for readiness; Clear removes the sequence; End finishes cleanup. |
+| Automatic practice and form quality | Reported as unsupported by the unattended suite. Requires a person visibly holding the starting pose, following the replay and deliberately changing/correcting form. Synthetic regression coverage does not replace this. |
 | Diagnostic camera | Local sampled camera images arrive, camera restart creates a new generation, and images arrive from that generation. Images stay local in diagnostics. |
 | Pose arrival | A native landmark frame is observed, or explicitly unsupported when none is observed. This does not assess pose accuracy. |
 | Final cleanup | The live route returns to its stopped state after diagnostics. |
@@ -62,3 +63,5 @@ Continue manual visual review for avatar deformation, animation changes and layo
 Android 17/API 37 emulator, combined development APK, actual configured providers: **5 pass, 0 fail, 1 unsupported**. The unsupported item was pose-landmark arrival from the virtual no-person feed; diagnostic sampled-image arrival and restart passed. See [DEVICE_SMOKE_RESULTS.json](DEVICE_SMOKE_RESULTS.json) for the compact evidence. Earlier manual avatar findings remain in [LATENCY_AND_AVATAR_VERIFICATION.md](LATENCY_AND_AVATAR_VERIFICATION.md).
 
 The Samsung SM-S928U physical Android 17 phone also passed five checks, with pose arrival unsupported while no person was tracked. Startup fixes, earlier failures and remaining human acceptance are recorded in [PHYSICAL_PHONE_TEST_RESULTS.md](PHYSICAL_PHONE_TEST_RESULTS.md).
+
+The adaptive-form branch was tested only on that physical phone, using dedicated Metro port 8084: **5 pass, 0 fail, 2 unsupported**. It replaces the manual goalpost-button assertion with automatic-readiness waiting. Both human automatic practice/form quality and no-person landmark arrival remain unsupported in the unattended run. See [adaptive-form handoff](ADAPTIVE_FORM_COACHING.md) for current contracts, evidence and manual steps.

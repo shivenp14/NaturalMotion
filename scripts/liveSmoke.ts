@@ -4,6 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { compileUpperBodySequence } from '../src/anatomy/upperBodySequence';
 import type { LiveServerMessage } from '../src/live/protocol';
 import { LiveCompletion } from './liveCompletion';
+import { validateAssessmentPlan } from '../src/vision/assessmentPlan';
 
 const address = new URL(process.env.AGENT_TEST_BASE_URL ?? 'http://127.0.0.1:3001');
 address.protocol = address.protocol === 'https:' ? 'wss:' : 'ws:'; address.pathname = '/live';
@@ -57,6 +58,9 @@ socket.on('message', data => {
       if (expectNoMovement && event.action.type === 'play_sequence') { finish('Unexpected movement in a no-movement test.'); return; }
       if (event.action.type !== 'play_sequence') { socket.send(JSON.stringify({ type: 'applied', commandId: event.commandId, ok: false })); return; }
       const program = compileUpperBodySequence(event.action.sequence);
+      const assessment = validateAssessmentPlan(event.action.assessmentPlan, event.action.sequence);
+      if (!assessment?.checks.length) throw new Error('No assessment checks were selected.');
+      console.log(`Validated ${assessment.checks.length} movement-matched assessment checks.`);
       console.log(`Renderer compiler accepted ${program.segments.length} groups, ${program.durationSeconds}s. Host protocol test acknowledges acceptance; no body is rendered by this script.`);
       accepted = true;
       socket.send(JSON.stringify({ type: 'applied', commandId: event.commandId, ok: true }));

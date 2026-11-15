@@ -54,8 +54,8 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
   }, [program, rig, invalidate]);
   useLayoutEffect(() => {
     if (!program || !report.current || programDone.current) return;
-    const sample = programTime.current < preparationSeconds.current ? { stepIndex: 0, phase: 'preparing' as const } : sampleUpperBodyProgram(program, programTime.current - preparationSeconds.current);
-    report.current(sample.stepIndex, sample.phase, playbackPaused ? 'paused' : 'playing', Date.now());
+    const sample = programTime.current < preparationSeconds.current ? { stepIndex: 0, phase: 'preparing' as const, phaseElapsedSeconds: 0 } : sampleUpperBodyProgram(program, programTime.current - preparationSeconds.current);
+    report.current(sample.stepIndex, sample.phase, playbackPaused ? 'paused' : 'playing', Date.now(), sample.phaseElapsedSeconds);
     firstFrame.current = true;
     invalidate();
   }, [program, playbackPaused, invalidate]);
@@ -97,7 +97,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
           model.setFocusCodes(program.segments[sample.stepIndex].focusCodes);
           focusedStep.current = sample.stepIndex;
         }
-        report.current(sample.stepIndex, sample.phase, sample.completed ? 'completed' : 'playing', Date.now());
+        report.current(sample.stepIndex, sample.phase, sample.completed ? 'completed' : 'playing', Date.now(), sample.phaseElapsedSeconds);
         programDone.current = sample.completed;
       }
       if (!programDone.current) invalidate();

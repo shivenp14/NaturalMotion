@@ -6,7 +6,7 @@ import type { PoseObservation } from '../shared/contracts';
  * BlazePose position.
  *
  * Reporting a joint is not the same as requiring it. A check declares which of these it needs in
- * `REQUIRED_GOALPOST_JOINTS`, so an occluded wrist cannot block a shoulder measurement.
+ * its geometry requirements, so an occluded wrist cannot block an upper-arm measurement.
  */
 export const UPPER_BODY_JOINTS = [
   { name: 'nose', index: 0, libraryName: 'nose' },
@@ -18,6 +18,8 @@ export const UPPER_BODY_JOINTS = [
   { name: 'right_elbow', index: 14, libraryName: 'rightElbow' },
   { name: 'left_wrist', index: 15, libraryName: 'leftWrist' },
   { name: 'right_wrist', index: 16, libraryName: 'rightWrist' },
+  { name: 'left_hip', index: 23, libraryName: 'leftHip' },
+  { name: 'right_hip', index: 24, libraryName: 'rightHip' },
 ] as const;
 
 export type VisionJointName = (typeof UPPER_BODY_JOINTS)[number]['name'];
@@ -27,6 +29,7 @@ export type PoseFrameLike = {
   readonly landmarks: ArrayLike<number>;
   /** Monotonic result clock in milliseconds. Not wall time; never compare it with `Date.now()`. */
   readonly timestamp?: number;
+  readonly worldLandmarks?: ArrayLike<number>;
 };
 
 /**
@@ -54,6 +57,7 @@ const STRIDE = 4;
  */
 export function toPoseObservation(frame: PoseFrameLike, observedAt: number): PoseObservation {
   const landmarks: PoseObservation['landmarks'] = {};
+  const worldLandmarks: NonNullable<PoseObservation['worldLandmarks']> = {};
   for (const joint of UPPER_BODY_JOINTS) {
     const offset = joint.index * STRIDE;
     const x = frame.landmarks[offset];
@@ -65,6 +69,10 @@ export function toPoseObservation(frame: PoseFrameLike, observedAt: number): Pos
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
     if (!Number.isFinite(visibility) || visibility <= 0) continue;
     landmarks[joint.name] = { x, y, visibility };
+    if (frame.worldLandmarks) {
+      const [wx, wy, wz] = [frame.worldLandmarks[offset], frame.worldLandmarks[offset + 1], frame.worldLandmarks[offset + 2]];
+      if ([wx, wy, wz].every(Number.isFinite)) worldLandmarks[joint.name] = { x: wx, y: wy, z: wz };
+    }
   }
-  return { observedAt, mirrored: false, landmarks };
+  return { observedAt, mirrored: false, landmarks, ...(Object.keys(worldLandmarks).length ? { worldLandmarks } : {}) };
 }

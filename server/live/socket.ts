@@ -7,7 +7,9 @@ import { validateSequence } from '../../src/shared/validateSequence';
 import { hasOnlyKeys, isRecord } from '../../src/shared/validation';
 import type { LiveAction, LiveServerMessage } from '../../src/live/protocol';
 import type { PlaybackState } from '../../src/shared/contracts';
-import { deriveFormPlan, formMessage } from '../../src/vision/checks/registry';
+import { currentAssessmentChecks } from '../../src/vision/assessmentPlan';
+import { assessMeasurements } from '../../src/vision/assessmentGeometry';
+import { FeedbackSpeechPolicy } from '../../src/vision/feedbackPolicy';
 import { planMovement } from './planner';
 import { geminiConnector, type ConnectConversation, type ConversationConnection } from './gemini';
 import { ToolController } from './ToolController';
@@ -33,8 +35,8 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
     let playback: PlaybackState | null = null;
     let practiceStartedAt: number | null = null;
     let lastImage = 0;
-    let lastForm = '';
-    let lastFormAt = 0;
+    const feedbackSpeech = new FeedbackSpeechPolicy();
+    let lastFeedbackContext = '';
     let initialized = false;
     let messageWindow = Date.now();
     let messageCount = 0;
@@ -140,11 +142,15 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
               if (!sequence || !isRecord(value) || value.sequenceId !== sequence.id ||
                 !Number.isInteger(value.stepIndex) || (value.stepIndex as number) < 0 || (value.stepIndex as number) >= sequence.steps.length ||
                 !['preparing', 'moving', 'holding', 'returning', 'completed'].includes(String(value.phase)) ||
-                !['playing', 'paused', 'completed'].includes(String(value.status)) || typeof value.updatedAt !== 'number' || !Number.isFinite(value.updatedAt)) throw new Error('Invalid playback context.');
+                !['playing', 'paused', 'completed'].includes(String(value.status)) || typeof value.updatedAt !== 'number' || !Number.isFinite(value.updatedAt) ||
+                (value.phaseElapsedSeconds !== undefined && (typeof value.phaseElapsedSeconds !== 'number' || !Number.isFinite(value.phaseElapsedSeconds) || value.phaseElapsedSeconds < 0 || value.phaseElapsedSeconds > 5))) throw new Error('Invalid playback context.');
               playback = value as PlaybackState;
             } else playback = null;
             practiceStartedAt = typeof input.practiceStartedAt === 'number' && Number.isFinite(input.practiceStartedAt) &&
               input.practiceStartedAt <= now + 1000 && input.practiceStartedAt >= now - 600_000 ? input.practiceStartedAt : null;
+            const accepted = tools.currentSequence;
+            if (tools.currentAssessment && accepted && accepted.id === sequence?.id &&
+              JSON.stringify(sequence.steps) !== JSON.stringify(accepted.steps)) throw new Error('Sequence context conflicts with the accepted movement.');
             tools.setSequence(sequence);
             if (!initialized) {
               initialized = true;
@@ -185,19 +191,23 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             const sequence = tools.currentSequence;
             if (!hasOnlyKeys(input, ['type', 'report']) || !isRecord(report) || !sequence || !playback || report.sequenceId !== sequence.id || report.stepIndex !== playback.stepIndex ||
               typeof report.observedAt !== 'number' || !Number.isFinite(report.observedAt) || now - report.observedAt > 2000 || report.observedAt > now + 1000 ||
+              report.observedAt < Math.max(playback.updatedAt - (playback.phaseElapsedSeconds ?? 0) * 1000, practiceStartedAt ?? 0) ||
               !['aligned', 'needs_adjustment', 'not_observable', 'unavailable'].includes(String(report.status))) break;
-            const practice = practiceStartedAt !== null && playback.status === 'completed' && playback.stepIndex === sequence.steps.length - 1;
-            const expected = deriveFormPlan(sequence, practice ? 0 : 0.6).get(playback.stepIndex);
-            const status = expected && report.checkId === expected &&
-              (practice || (playback.phase === 'holding' && playback.status === 'playing'))
-              ? report.status as 'aligned' | 'needs_adjustment' | 'not_observable' | 'unavailable' : 'unavailable';
-            const key = JSON.stringify([sequence.id, playback.stepIndex, practice ? 'practice' : 'demonstration', status]);
-            if (key === lastForm || (status !== 'not_observable' && status !== 'unavailable' && now - lastFormAt < 2500)) break;
-            lastForm = key; lastFormAt = now;
-            const speakFeedback = practice && status !== 'unavailable';
+            const plan = tools.currentAssessment;
+            const practice = practiceStartedAt !== null;
+            const checks = plan && practice ? currentAssessmentChecks(plan, sequence, playback, report.observedAt) : [];
+            const measurements = isRecord(report.measurements) ? report.measurements : {};
+            if (Object.keys(measurements).length > 6 || Object.values(measurements).some(n => n !== null && (typeof n !== 'number' || !Number.isFinite(n) || Math.abs(n) > 180))) break;
+            const assessment = assessMeasurements(checks, measurements as Record<string, number | null>);
+            const canonical = { sequenceId: sequence.id, stepIndex: playback.stepIndex,
+              mode: practice ? 'practice' as const : 'demonstration' as const, observedAt: report.observedAt as number, ...assessment };
+            if (pendingTools > 0) { feedbackSpeech.shouldSpeak(null, now); break; }
+            const speakFeedback = feedbackSpeech.shouldSpeak(canonical, now);
+            const key = JSON.stringify([sequence.id, playback.stepIndex, canonical.mode, assessment.status, assessment.checkId, assessment.message]);
+            if (!speakFeedback && key === lastFeedbackContext) break;
+            lastFeedbackContext = key;
             provider?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `DETERMINISTIC_FORM_STATUS ${JSON.stringify({
-              sequenceId: sequence.id, stepIndex: playback.stepIndex, checkId: expected ?? null,
-              mode: practice ? 'practice' : 'demonstration', status, message: formMessage(status),
+              ...canonical,
             })}. This is application context, not a new user request. Do not invoke movement tools.${speakFeedback ? ' Speak the supplied message once, using its exact words. Do not add a broader form or safety judgment.' : ' Retain as context; no spoken update is requested.'}` }] }], turnComplete: speakFeedback });
             break;
           }

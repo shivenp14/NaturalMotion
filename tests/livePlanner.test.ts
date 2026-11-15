@@ -9,7 +9,10 @@ const group = (elevation: number, flexion: number) => ({ durationSeconds: 3, hol
     { componentId: `${side}_shoulder_elevation`, toDeg: elevation },
     { componentId: `${side}_elbow_flexion`, toDeg: flexion },
   ]) });
-const valid = { steps: [group(145, 20), group(90, 90)], message: '' };
+const valid = { steps: [group(145, 20), group(90, 90)], assessment: [
+  { stepIndex: 0, side: 'left', metric: 'upper_arm_elevation', toleranceDeg: 20 },
+  { stepIndex: 1, side: 'right', metric: 'forearm_direction', toleranceDeg: 20 },
+], message: '' };
 const run = (payload: unknown) => planMovement({ ...anatomyAgentCapabilities, apiKey: 'fixture', model: 'fixture',
   reasoningEffort: 'low',
   fetch: async (_url, init) => {
@@ -27,6 +30,9 @@ test('compact planner derives continuous starts and retains omitted channels', a
   assert.equal(program.segments[1].from.left.elevationDeg, 145);
   assert.equal(program.segments[1].to.left.externalRotationDeg, 90);
   assert.equal(program.segments[1].to.left.elevationDeg, 90);
+  assert.equal(result.assessmentPlan?.sequenceId, result.sequence.id);
+  assert.equal(result.assessmentPlan?.checks.length, 2);
+  assert.ok(Number.isFinite(result.assessmentPlan?.checks[0].targetDeg));
 });
 
 test('compact planner still rejects cross-joint violations, conflicting channels and invented values', async () => {
@@ -39,6 +45,15 @@ test('compact planner still rejects cross-joint violations, conflicting channels
 });
 
 test('compact planner explains unsupported requests without an executable sequence', async () => {
-  assert.deepEqual(await run({ steps: [], message: 'That movement is outside the supported components.' }),
+  assert.deepEqual(await run({ steps: [], assessment: [], message: 'That movement is outside the supported components.' }),
     { sequence: null, message: 'That movement is outside the supported components.' });
+});
+
+test('planner rejects unsupported checks, invented numeric targets and mismatched steps', async () => {
+  for (const extra of [{ metric: 'wall_contact' }, { targetDeg: 90 }, { stepIndex: 2 }, { side: 'both' }, { toleranceDeg: 0 }]) {
+    const input = structuredClone(valid); Object.assign(input.assessment[0], extra);
+    await assert.rejects(run(input));
+  }
+  await assert.rejects(run({ ...valid, steps: [] }));
+  await assert.rejects(run({ ...valid, assessment: [...valid.assessment, valid.assessment[0]] }));
 });

@@ -7,13 +7,15 @@ import { createWallAngelReference } from '../anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../anatomy/wallAngel';
 import { LiveClient } from '../live/LiveClient';
 import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
-import type { PoseObservation } from '../shared/contracts';
+import type { PlaybackState, PoseObservation } from '../shared/contracts';
 import type { LiveAudio } from '../voice/LiveAudio.types';
 import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
 import { getCameraPermission, requestCameraPermission } from 'react-native-pose-detection';
 import { CameraPoseView } from '../vision/CameraPoseView';
 import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/landmarks';
-import { deriveFormPlan, SequenceFormEvaluator } from '../vision/checks/registry';
+import { evaluateAdaptiveForm } from '../vision/adaptiveForm';
+import { PracticeSession } from '../vision/practiceSession';
+import type { PracticeSnapshot } from '../vision/practiceSession';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { appendCleanup } from './cleanup';
@@ -31,7 +33,7 @@ export function LiveCoachScreen() {
   const healthRequest = useRef<AbortController | null>(null);
   const observation = useRef<PoseObservation | null>(null);
   const poseClock = useRef<number | null>(null);
-  const evaluator = useRef(new SequenceFormEvaluator());
+  const practiceSession = useRef(new PracticeSession());
   const counters = useRef({ microphone: 0, images: 0, peak: 0 });
   const [stats, setStats] = useState({ microphone: 0, images: 0, peak: 0 });
   const [mode, setMode] = useState<'live' | 'local' | null>(null);
@@ -40,9 +42,7 @@ export function LiveCoachScreen() {
   const [planning, setPlanning] = useState(false);
   const [cameraWarning, setCameraWarning] = useState('');
   const [report, setReport] = useState<FormReport | null>(null);
-  const [practiceStartedAt, setPracticeStartedAt] = useState<number | null>(null);
-  const practice = useRef<number | null>(null);
-  useEffect(() => { practice.current = practiceStartedAt; }, [practiceStartedAt]);
+  const [practiceView, setPracticeView] = useState<PracticeSnapshot>({ sequence: null, playback: null, startedAt: null });
   const lastReport = useRef('');
   const lastFormSentAt = useRef(0);
   const [turns, setTurns] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
@@ -54,9 +54,9 @@ export function LiveCoachScreen() {
     healthRequest.current?.abort(); healthRequest.current = null;
     client.current?.stop(); client.current = null;
     const previous = audio.current; audio.current = null;
-    observation.current = null; poseClock.current = null; evaluator.current.reset(); lastReport.current = '';
-    latest.current.reset(); practice.current = null;
-    if (mounted.current) { setPending(true); setMode(null); setPlanning(false); setReport(null); setPracticeStartedAt(null); }
+    observation.current = null; poseClock.current = null; practiceSession.current.reset(); lastReport.current = '';
+    latest.current.reset();
+    if (mounted.current) { setPending(true); setMode(null); setPlanning(false); setReport(null); setPracticeView(practiceSession.current.snapshot); }
     stopping.current = appendCleanup(stopping.current, previous ? () => previous.stop() : undefined);
     await stopping.current;
     if (mounted.current && run === epoch.current) { setPending(false); setMessage(reason); }
@@ -73,17 +73,25 @@ export function LiveCoachScreen() {
   }, [stop]);
 
   useEffect(() => {
-    client.current?.send({ type: 'context', sequence: session.sequence, playback: session.playback, practiceStartedAt });
-  }, [session.sequence, session.playback, practiceStartedAt]);
+    client.current?.send({ type: 'context', sequence: session.sequence, playback: practiceView.playback ?? session.playback, practiceStartedAt: practiceView.startedAt });
+  }, [session.sequence, session.playback, practiceView]);
 
   const evaluate = useCallback(() => {
     const context = latest.current;
-    const result = evaluator.current.evaluate(context.sequence, context.playback, observation.current, Date.now(), practice.current);
-    const key = result ? JSON.stringify([result.sequenceId, result.stepIndex, result.status, result.mode]) : '';
+    const now = Date.now();
+    const view = practiceSession.current.update(context.sequence, context.assessmentPlan,
+      context.paused && context.playback ? { ...context.playback, status: 'paused' } : context.playback, observation.current, now);
+    const active = view.playback ?? context.playback;
+    const playback = context.paused && active ? { ...active, status: 'paused' as const } : active;
+    const result = evaluateAdaptiveForm(context.sequence, context.assessmentPlan, playback, observation.current, now, view.startedAt);
+    const key = result ? JSON.stringify([result.sequenceId, result.stepIndex, result.status, result.mode, result.checkId, result.message]) : '';
     if (mounted.current) {
+      setPracticeView(previous => previous === view ? previous : view);
       const changed = key !== lastReport.current;
       if (changed) { lastReport.current = key; setReport(result); }
-      if (result && (changed || Date.now() - lastFormSentAt.current >= 1000)) {
+      if (result && (changed || Date.now() - lastFormSentAt.current >= 250)) {
+        // Context must arrive before evidence from a newly started replay/phase.
+        client.current?.send({ type: 'context', sequence: context.sequence, playback, practiceStartedAt: view.startedAt });
         lastFormSentAt.current = Date.now(); client.current?.send({ type: 'form', report: result });
       }
     }
@@ -129,11 +137,11 @@ export function LiveCoachScreen() {
           apply: (action: LiveAction) => {
             if (run !== epoch.current || !mounted.current) throw new Error('Session is cancelled.');
             if (action.type === 'play_sequence') {
-              const checked = latest.current.acceptSequence(action.sequence);
+              const checked = latest.current.acceptSequence(action.sequence, action.assessmentPlan);
               if (!checked.ok) throw new Error(checked.error);
-              practice.current = null; setPracticeStartedAt(null); setReport(null); lastReport.current = '';
-            } else if (action.type === 'stop_movement') { latest.current.reset(); practice.current = null; setPracticeStartedAt(null); setReport(null); }
-            else if (action.type === 'pause_movement') { latest.current.setPaused(true); practice.current = null; setPracticeStartedAt(null); }
+              practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastReport.current = '';
+            } else if (action.type === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
+            else if (action.type === 'pause_movement') latest.current.setPaused(true);
             else if (action.type === 'resume_movement') latest.current.setPaused(false);
             else throw new Error('Unknown movement action.');
           },
@@ -173,8 +181,8 @@ export function LiveCoachScreen() {
   }
 
   function control(name: LiveControl) {
-    if (name === 'stop_movement') { latest.current.reset(); practice.current = null; setPracticeStartedAt(null); setReport(null); }
-    else { latest.current.setPaused(name === 'pause_movement'); practice.current = null; setPracticeStartedAt(null); }
+    if (name === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
+    else latest.current.setPaused(name === 'pause_movement');
     client.current?.send({ type: 'control', name });
   }
   function onPose(frame: PoseFrameLike) {
@@ -182,11 +190,14 @@ export function LiveCoachScreen() {
     poseClock.current = frame.timestamp ?? null;
     observation.current = toPoseObservation(frame, Date.now()); evaluate();
   }
-  const canPractice = session.sequence && session.playback?.status === 'completed' &&
-    deriveFormPlan(session.sequence).has(session.sequence.steps.length - 1);
+  function recordPlayback(value: PlaybackState) {
+    if (practiceSession.current.recordPlayback(value)) { setPracticeView(practiceSession.current.snapshot); evaluate(); }
+    else latest.current.recordPlayback(value);
+  }
+  const activePlayback = practiceView.playback ?? session.playback;
   const connectionMarker = pending ? 'live-starting' : mode === 'live' ? 'live-connected' : mode === 'local' ? 'live-local-ready' : 'live-stopped';
-  const playbackMarker = !session.sequence ? 'idle' : !session.playback ? 'preparing' :
-    session.playback.status === 'playing' ? 'active' : session.playback.status;
+  const playbackMarker = !session.sequence ? 'idle' : !activePlayback ? 'preparing' :
+    activePlayback.status === 'playing' ? 'active' : activePlayback.status;
 
   return (
     <SafeAreaView style={styles.screen} testID="live-screen">
@@ -196,7 +207,7 @@ export function LiveCoachScreen() {
         <Pressable testID="live-end" accessibilityRole="button" onPress={() => void stop()} style={styles.smallButton}><Text style={styles.buttonText}>End coach</Text></Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.note}>Live mode sends microphone audio and sampled camera images to the conversation provider. Pose checks run locally. Face the phone with your shoulders, elbows and ears visible.</Text>
+        <Text style={styles.note}>Live mode sends microphone audio and sampled camera images to the conversation provider. Pose checks run locally. Face the phone with your shoulders, elbows, wrists and hips visible.</Text>
         <Text style={styles.status} accessibilityLiveRegion="polite">{planning ? 'Preparing your movement…' : message}</Text>
         {!mode && <View style={styles.row}>
           <Pressable testID="live-start" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>{pending ? 'Preparing…' : 'Start live coach'}</Text></Pressable>
@@ -216,15 +227,15 @@ export function LiveCoachScreen() {
           {!!cameraWarning && <Text style={styles.note}>{cameraWarning}</Text>}
           <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
         </>}
-        <AnatomyViewport sequence={session.sequence} paused={session.paused}
-          onPlaybackChange={session.recordPlayback} showLab={false} compact />
+        <AnatomyViewport sequence={practiceView.sequence ?? session.sequence} paused={session.paused}
+          onPlaybackChange={recordPlayback} showLab={false} compact />
+        {session.assessmentPlan?.checks.length ? <Text testID={practiceView.startedAt === null ? 'live-practice-waiting' : 'live-practice-active'} style={styles.note}>{practiceView.startedAt === null ? 'After watching, hold the starting arm position to begin practice automatically.' : 'Follow the movement. The camera checks the selected arm positions while you practice.'}</Text> : null}
         <Text testID={`live-form-${report?.mode ?? 'none'}`} style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
         {session.sequence && <>
-          <Text style={styles.note}>{session.playback ? `Step ${session.playback.stepIndex + 1} · ${session.playback.phase} · ${session.playback.status}` : 'Preparing demonstration…'}</Text>
+          <Text style={styles.note}>{activePlayback ? `Step ${activePlayback.stepIndex + 1} · ${activePlayback.phase} · ${activePlayback.status}` : 'Preparing demonstration…'}</Text>
           <View style={styles.row}>
             <Pressable testID={session.paused ? 'live-resume' : 'live-pause'} accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
             <Pressable testID="live-clear" accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Clear movement</Text></Pressable>
-            {!!canPractice && <Pressable accessibilityRole="button" onPress={() => setPracticeStartedAt(Date.now())} style={styles.button}><Text style={styles.buttonText}>Check final goalpost position</Text></Pressable>}
           </View>
         </>}
         {mode === 'live' && <View style={styles.panel}>

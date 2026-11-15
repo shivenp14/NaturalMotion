@@ -1,10 +1,11 @@
 import type { MovementSequence } from '../../src/shared/contracts';
+import type { AssessmentPlan } from '../../src/shared/assessment';
 import type { LiveAction } from '../../src/live/protocol';
 import { hasOnlyKeys, isRecord } from '../../src/shared/validation';
 
 export type ToolResult = { ok: boolean; message: string; sequenceId?: string };
 type ToolCall = { id?: string; name?: string; args?: unknown };
-export type MovementPlan = { sequence: MovementSequence | null; message: string };
+export type MovementPlan = { sequence: MovementSequence | null; message: string; assessmentPlan?: AssessmentPlan | null };
 type Options = {
   plan(utterance: string, interpretation: string, current: MovementSequence | null, signal: AbortSignal): Promise<MovementPlan>;
   apply(action: LiveAction, signal: AbortSignal): Promise<void>;
@@ -14,6 +15,7 @@ type Options = {
 /** Server-owned action limits. Seeing another camera frame never creates a planning budget. */
 export class ToolController {
   private sequence: MovementSequence | null = null;
+  private assessment: AssessmentPlan | null = null;
   private utterance = '';
   private inputOpen = false;
   private awaitingInput = true;
@@ -28,7 +30,13 @@ export class ToolController {
   private waiting = new Map<string, { cancelled: boolean }>();
   constructor(private readonly options: Options) {}
   get currentSequence() { return this.sequence; }
-  setSequence(sequence: MovementSequence | null) { this.sequence = sequence; }
+  get currentAssessment() { return this.assessment; }
+  setSequence(sequence: MovementSequence | null) {
+    // Identical accepted context retains its compiled assessment cache.
+    if (this.assessment && sequence?.id === this.sequence?.id) return;
+    if (sequence?.id !== this.sequence?.id) this.assessment = null;
+    this.sequence = sequence;
+  }
   beginSpeech() {
     this.speechBoundaries = true;
     if (this.inputOpen && this.utterance && !this.usedPlan) return;
@@ -69,7 +77,7 @@ export class ToolController {
     if (this.closed) return { ok: false, message: 'Session is closed.' };
     this.cancel();
     await this.options.apply({ type: name }, new AbortController().signal);
-    if (name === 'stop_movement') this.sequence = null;
+    if (name === 'stop_movement') { this.sequence = null; this.assessment = null; }
     return { ok: true, message: name === 'stop_movement' ? 'Movement cleared.' : name === 'pause_movement' ? 'Movement paused.' : 'Movement resumed.' };
   }
   handle(call: ToolCall): Promise<ToolResult> {
@@ -121,9 +129,10 @@ export class ToolController {
       const plan = await this.options.plan(this.utterance, call.args.request, this.sequence, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Planning was cancelled.' };
       if (!plan.sequence) return { ok: false, message: plan.message || 'No supported demonstration was generated.' };
-      await this.options.apply({ type: 'play_sequence', sequence: plan.sequence }, abort.signal);
+      await this.options.apply({ type: 'play_sequence', sequence: plan.sequence, ...(plan.assessmentPlan ? { assessmentPlan: plan.assessmentPlan } : {}) }, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Application was cancelled.' };
       this.sequence = plan.sequence;
+      this.assessment = plan.assessmentPlan ?? null;
       return { ok: true, sequenceId: plan.sequence.id, message: 'Invite the user to watch the movement on screen. Do not announce readiness or recite technical settings or timings.' };
     } finally {
       clearTimeout(timeout);

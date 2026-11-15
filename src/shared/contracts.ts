@@ -40,6 +40,8 @@ export type PlaybackState = {
   phase: 'preparing' | 'moving' | 'holding' | 'returning' | 'completed';
   status: 'playing' | 'paused' | 'completed';
   updatedAt: number;
+  /** Renderer position within the phase at updatedAt; preserves progress across pauses/stalls. */
+  phaseElapsedSeconds?: number;
 };
 
 /** Image-relative x/y in [0,1]; confidence/visibility is an estimate in [0,1]. */
@@ -47,6 +49,8 @@ export type PoseObservation = {
   observedAt: number;
   mirrored: boolean;
   landmarks: Record<string, { x: number; y: number; visibility: number }>;
+  /** Optional MediaPipe metric estimates, not measured clinical joint positions. */
+  worldLandmarks?: Record<string, { x: number; y: number; z: number }>;
 };
 
 export type FormEvent = {
