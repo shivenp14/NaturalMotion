@@ -199,7 +199,7 @@ test('practice evidence validation rejects stale, fabricated and out-of-order da
 
 
 test('consistent visible differences near tolerance get a correction, not a visibility retry loop', () => {
-  for (const offset of [-24, 24, 27]) {
+  for (const offset of [-31, 31, 34]) {
     const input = attempt(4000, row => { row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + offset; });
     const review = reviewPracticeAttempt(sequence, plan, input);
     assert.equal(review.status, 'needs_adjustment', `Stable ${offset} degree difference`);
@@ -213,10 +213,17 @@ test('consistent visible differences near tolerance get a correction, not a visi
 test('inconsistent borderline measurements remain uncertain without blaming visibility', () => {
   let index = 0;
   const input = attempt(4000, row => {
-    row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + (index++ % 5 < 3 ? 24 : -10);
+    row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + (index++ % 5 < 3 ? 29 : -10);
   });
   const review = reviewPracticeAttempt(sequence, plan, input);
   assert.equal(review.status, 'not_observable');
   assert.match(review.message, /measurements varied/);
   assert.doesNotMatch(review.message, /arms fully visible/);
+});
+
+test('small visible arm variations are accepted with the conversational review grace', () => {
+  for (const offset of [-16, 16]) {
+    const input = attempt(4000, row => { row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + offset; });
+    assert.equal(reviewPracticeAttempt(sequence, plan, input).status, 'aligned', JSON.stringify(reviewPracticeAttempt(sequence, plan, input)));
+  }
 });

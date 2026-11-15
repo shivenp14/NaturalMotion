@@ -148,12 +148,12 @@ export function reviewPracticeAttempt(sequence: MovementSequence, plan: Assessme
     if (errors.length < 4 || errors.length / Math.max(1, rows.length) < 0.7 || bins.size < 3) return {
       ...base, status: 'not_observable', message: 'I could not see the whole arm movement clearly enough to judge it. Try again with both arms and hips in view.' };
     const error = median(errors.map(row => row.error));
-    // Confidence comes from agreement across samples, not the size of a form
-    // difference. A stable 21–28 degree error used to fall into an uncertainty
-    // dead zone above a 20 degree tolerance, despite complete visible evidence.
-    const persistent = errors.filter(row => Math.sign(row.error) === Math.sign(error) && Math.abs(row.error) > check.toleranceDeg).length / errors.length;
-    if (Math.abs(error) > check.toleranceDeg) {
-      if (persistent >= 0.65) problems.push({ check, error, score: Math.abs(error) / check.toleranceDeg });
+    // Small person-to-model differences get five degrees of grace. Confidence
+    // still depends on consistent, visible measurements; missing data is unchanged.
+    const tolerance = check.toleranceDeg + 5;
+    const persistent = errors.filter(row => Math.sign(row.error) === Math.sign(error) && Math.abs(row.error) > tolerance).length / errors.length;
+    if (Math.abs(error) > tolerance) {
+      if (persistent >= 0.65) problems.push({ check, error, score: Math.abs(error) / tolerance });
       else inconsistent = true;
     }
   }
