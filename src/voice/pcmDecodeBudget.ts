@@ -1,3 +1,6 @@
+// Allow complete conversational replies generated faster than real-time playback.
+export const MAX_BUFFERED_AUDIO_SECONDS = 60;
+
 /** Reserve PCM16/24kHz/mono duration before retaining chunks in a decode chain. */
 export class AudioBacklogError extends Error {
   constructor() { super('Audio playback fell behind.'); }
@@ -13,7 +16,7 @@ export class PcmDecodeBudget {
     const bytes = base64.length / 4 * 3 - padding;
     const seconds = bytes / 48000;
     if (!Number.isInteger(bytes) || bytes <= 0 || bytes % 2 !== 0) throw new Error('Invalid PCM audio received. Restart the live session.');
-    if (this.pending + queuedSeconds + seconds > 15) throw new AudioBacklogError();
+    if (this.pending + queuedSeconds + seconds > MAX_BUFFERED_AUDIO_SECONDS) throw new AudioBacklogError();
     this.pending += seconds;
     const epoch = this.generation;
     let released = false;

@@ -1,7 +1,7 @@
 import { AudioContext, AudioManager, AudioRecorder, type AudioBufferQueueSourceNode } from 'react-native-audio-api';
 import type { LiveAudio } from './LiveAudio.types';
 import { encodePcm16 } from './pcm';
-import { AudioBacklogError, PcmDecodeBudget } from './pcmDecodeBudget';
+import { AudioBacklogError, MAX_BUFFERED_AUDIO_SECONDS, PcmDecodeBudget } from './pcmDecodeBudget';
 
 export async function requestLiveMicrophonePermission() {
   if (await AudioManager.checkRecordingPermissions() === 'Granted') return;
@@ -27,7 +27,8 @@ export function createLiveAudio(): LiveAudio {
     if (__DEV__) console.warn('[LiveAudio]', error instanceof Error ? error.message : 'Output failed',
       { pendingSeconds: pending.seconds, queuedSeconds });
     if (error instanceof AudioBacklogError) {
-      interrupt(); pending.discardReply();
+      // Keep already buffered speech playing instead of cutting it off mid-sentence.
+      pending.discardReply();
       onWarning('Some spoken audio was skipped. The session is still connected; ask me to repeat if needed.');
     } else onFailure(error instanceof Error ? error.message : 'Audio playback failed.');
   }
@@ -43,7 +44,7 @@ export function createLiveAudio(): LiveAudio {
       const buffer = await current.decodePCMInBase64(base64, 24000, 1);
       if (!active || generation !== epoch || !queue) return;
       release();
-      if (pending.seconds + queuedSeconds + buffer.duration > 15) throw new AudioBacklogError();
+      if (pending.seconds + queuedSeconds + buffer.duration > MAX_BUFFERED_AUDIO_SECONDS) throw new AudioBacklogError();
       const id = queue.enqueueBuffer(buffer);
       durations.set(id, buffer.duration); queuedSeconds += buffer.duration;
       if (!started) { queue.start(); started = true; }
