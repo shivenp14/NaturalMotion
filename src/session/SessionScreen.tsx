@@ -31,7 +31,7 @@ export function SessionScreen() {
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
             <Text style={styles.devText}>Session: {phase} · Registered components: {catalog.length}</Text>
-            <Text style={styles.devText}>Anatomy, camera, and agent services are not connected.</Text>
+            <Text style={styles.devText}>Anatomy and voice test panels are available. Agent movement integration is the next step; camera checks are not connected.</Text>
             <VoiceDevPanel />
           </View>
         )}

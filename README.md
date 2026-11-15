@@ -5,13 +5,13 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 ## What is ready
 
 - Expo SDK 58 / React Native 0.88 / React 19 / TypeScript starter with Expo Router.
-- A native landing/session shell and a clearly labeled empty anatomy viewport.
+- A native landing/session shell and a rigged anatomy viewer with graphite finish, view controls, and educational region highlighting.
 - Shared movement, playback, pose, and form-feedback contracts.
 - Runtime sequence validation and feedback freshness helpers with protocol tests.
 - Native recognition/TTS adapters, validated half-duplex turn coordination, and a development echo test.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The movement catalog is intentionally empty.** No clinical movement, anatomy asset, or pose engine is implemented yet. A local OpenAI backend and HTTP agent adapter are implemented; live provider access remains unverified. A native voice adapter and development-only echo panel are implemented; audio capture has been confirmed by the user; the full agent loop remains unverified. The session button stays disabled until those integrations exist. Select the movement family together, then build against the interfaces below.
+**The agent-facing movement catalog is intentionally empty.** The anatomy viewer executes validated [composable upper-body sequences](docs/MOVEMENT_COMPOSITION.md), emits playback events and includes a wall-angel reference preview. The local OpenAI backend, HTTP agent adapter, and native voice test panel are implemented; PR #15 reports a successful live provider request and emulator recognition. Agent-to-anatomy integration, camera checks, and physical-phone spoken-response acceptance remain pending. The session button stays disabled until those integrations exist.
 
 ## Quick start
 
@@ -81,7 +81,7 @@ Person 1 coordinates dependency/config/lockfile edits. Person 3 coordinates shar
 - `src/shared/validateSequence.ts`: validate untrusted agent output against registered parameter ranges before playback.
 - `src/shared/formEvents.ts`: reject events from the wrong sequence/step, unsupported checks, and old/future observations. The vision owner must also gate checks by supported phases and validate adapter output.
 - `src/session/SessionProvider.tsx`: `acceptSequence`, `phase`, `sequence`, and `reset`. Extend session coordination here rather than creating disconnected stores.
-- `src/anatomy/AnatomyViewport.tsx`: replace the placeholder using its sequence input and playback callback.
+- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Sequence playback and its reserved callback remain the next integration step; see `docs/ANATOMY_PROGRESS.md`.
 - `src/vision/types.ts`: camera adapter and form-evaluator boundaries.
 - `src/agent/types.ts` / `src/voice/types.ts`: service and audio adapter boundaries.
 - `src/agent/validateAgentReturn.ts`: validate complete action batches before dispatch.
@@ -98,7 +98,7 @@ The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a sup
 4. Register that component, implement the renderer and evaluator, then give the catalog to the agent.
 5. Connect voice, playback, and real observations on the Android phone before expanding coverage.
 
-Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and camera packages remain deferred. Native voice packages are installed; rebuild the development client and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md) to verify device audio.
+Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and native voice packages are installed. Rebuild the development client with both sets of native modules and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md). Camera integration remains separate.
 
 ## Configuration and secrets
 
@@ -126,6 +126,7 @@ The initial npm audit reports eight moderate dependency findings through `minima
 - [Product brief](docs/PRODUCT_BRIEF.md)
 - [Three-person implementation plan](docs/TEAM_PLAN.md)
 - [Interactive team build timeline](docs/team-build-timeline.html)
+- [Anatomy proof progress](docs/ANATOMY_PROGRESS.md)
 
 Start with one integrated sequence, one highlighted region, and one real form correction. Acceptance is three consecutive complete runs on the presentation phone, including a spoken request that visibly changes a permitted movement parameter.
 
