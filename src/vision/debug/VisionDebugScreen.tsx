@@ -84,6 +84,9 @@ export function VisionDebugScreen() {
 
   const measurements = snapshot?.event.measurements;
 
+  // The route ships in every build; keep the diagnostic screen out of release and preview APKs.
+  if (!__DEV__) return null;
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.camera}>

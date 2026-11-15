@@ -46,6 +46,11 @@ upright-frame patch empirically; the numbers below remain the measurement to rec
 
 On the actual phone, record cold acquisition time and tracking gaps across three repeated runs:
 
+**First device pass (Android 17; exact model and fps not yet recorded):** the patched build tracked
+an upright body, and the goalpost check produced `aligned` for a clean hold, `needs_adjustment` for
+dropped elbows, and `tracking lost` when the body left the frame. Inference rate, acquisition
+latency and the demo lighting measurement are still open.
+
 1. With the phone stationary in portrait, enter view with head, hips and both elbows visible.
    Use front lighting; the supplied clip has a bright ceiling behind the head and a dark torso.
 2. Raise/lower arms repeatedly, turn the torso, briefly occlude an elbow, and return to view.
