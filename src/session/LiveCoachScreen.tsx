@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
 import { createWallAngelReference } from '../anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../anatomy/wallAngel';
@@ -61,6 +61,8 @@ export function LiveCoachScreen() {
     await cleanup;
     if (mounted.current) { setPending(false); setMessage('Session stopped. Camera and microphone released.'); }
   }, []);
+
+  useFocusEffect(useCallback(() => () => { void stop(); }, [stop]));
 
   useEffect(() => {
     mounted.current = true;
