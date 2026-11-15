@@ -4,9 +4,26 @@ import { ToolController } from '../server/live/ToolController';
 import { createWallAngelReference } from '../src/anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../src/anatomy/wallAngel';
 import type { LiveAction } from '../src/live/protocol';
+import { buildAssessmentPlan } from '../src/vision/assessmentPlan';
 
 const sequence = createWallAngelReference(wallAngelDefaults, 'tool-test');
 const call = (id: string) => ({ id, name: 'request_movement', args: { request: 'Show a wall angel.' } });
+
+test('starting and finishing practice uses the current assessment without generating another movement', async () => {
+  let plans = 0; const applied: LiveAction[] = [];
+  const assessmentPlan = buildAssessmentPlan(sequence, [{ stepIndex: 0, side: 'left', metric: 'elbow_bend', toleranceDeg: 20 }]);
+  const controller = new ToolController({ plan: async () => { plans++; return { sequence, assessmentPlan, message: '' }; },
+    apply: async action => { applied.push(action); }, onPlanning: () => {} });
+  controller.noteTextInput('Show a wall angel.'); assert.equal((await controller.handle(call('demo'))).ok, true);
+  controller.noteTextInput('I am doing it now.');
+  const start = { id: 'start', name: 'start_practice', args: {} };
+  assert.equal((await controller.handle(start)).ok, true); assert.equal((await controller.handle(start)).ok, true);
+  assert.equal((await controller.handle({ ...start, id: 'duplicate-intent' })).ok, false);
+  controller.noteTextInput('I finished.');
+  assert.equal((await controller.handle({ id: 'finish', name: 'finish_practice', args: {} })).ok, true);
+  assert.equal(plans, 1); assert.equal(controller.currentSequence, sequence);
+  assert.deepEqual(applied.slice(1), [{ type: 'start_practice' }, { type: 'finish_practice' }]);
+});
 
 test('one plan per user turn and duplicate call IDs never restart the demonstration', async () => {
   let planned = 0;

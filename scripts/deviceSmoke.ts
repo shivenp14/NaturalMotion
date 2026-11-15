@@ -91,8 +91,8 @@ async function main() {
       else await run('live_connection_playback', () => replay('live-playback.ad'));
     }
     if (deviceFailed) return;
-    add({ name: 'automatic_practice_and_form_quality', required: false, status: 'unsupported',
-      reason: 'Requires a person holding the starting pose and following the replay. Unit tests cover synthetic geometry; this unattended smoke run does not verify human form quality.' });
+    add({ name: 'human_practice_and_form_quality', required: false, status: 'unsupported',
+      reason: 'Requires a person performing a full self-paced repetition. Synthetic geometry and the no-person spoken-finish tool check through text do not verify human form quality.' });
     await run('diagnostic_camera_frames_restart', () => replay('diagnostic-camera.ad'));
     if (deviceFailed) return;
     if (args.includes('--require-pose')) {

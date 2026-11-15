@@ -36,3 +36,9 @@ test('invitation requires matching assessment and recent completion; a replaceme
   assert.equal(gate.take(sequence, plan, playback, null, false, 1000), PRACTICE_INVITATION);
   assert.equal(gate.take({ ...sequence, id: 'replacement' }, { ...plan, sequenceId: 'replacement' }, { ...playback, sequenceId: 'replacement' }, null, false, 1000), PRACTICE_INVITATION);
 });
+
+test('the initial invitation is allowed while quiet recording is already active, once only', () => {
+  const gate = new DemonstrationInvitation();
+  assert.equal(gate.take(sequence, plan, playback, 1000, false, 1100, true), PRACTICE_INVITATION);
+  assert.equal(gate.take(sequence, plan, playback, 1000, false, 1200, true), null);
+});

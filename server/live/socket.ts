@@ -7,9 +7,9 @@ import { validateSequence } from '../../src/shared/validateSequence';
 import { hasOnlyKeys, isRecord } from '../../src/shared/validation';
 import type { LiveAction, LiveServerMessage } from '../../src/live/protocol';
 import type { PlaybackState } from '../../src/shared/contracts';
-import { currentAssessmentChecks } from '../../src/vision/assessmentPlan';
-import { assessMeasurements } from '../../src/vision/assessmentGeometry';
-import { FeedbackSpeechPolicy } from '../../src/vision/feedbackPolicy';
+import { reviewPracticeAttempt } from '../../src/vision/repetitionTracker';
+import { validatePracticeAttempt } from '../../src/vision/validatePracticeAttempt';
+import type { PracticeReview } from '../../src/shared/practice';
 import { planMovement } from './planner';
 import { geminiConnector, type ConnectConversation, type ConversationConnection } from './gemini';
 import { ToolController } from './ToolController';
@@ -36,13 +36,16 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
     let playback: PlaybackState | null = null;
     let practiceStartedAt: number | null = null;
     let lastImage = 0;
-    const feedbackSpeech = new FeedbackSpeechPolicy();
-    let lastFeedbackContext = '';
+    const reviewed = new Set<string>();
+    let lastReview: PracticeReview | null = null;
+    let pendingReview: { review: PracticeReview; endedAt: number } | null = null;
+    let practiceStage = 'watching';
     let initialized = false;
     let messageWindow = Date.now();
     let messageCount = 0;
     let pendingTools = 0;
     let conversationBusy = false;
+    let speechPurpose: 'conversation' | 'invitation' | 'review' = 'conversation';
     const invitation = new DemonstrationInvitation();
     const pending = new Map<string, { finish(ok: boolean): void }>();
     const send = (message: LiveServerMessage) => {
@@ -83,13 +86,22 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
 
     function invitePractice() {
       const sequence = tools.currentSequence;
-      if (!provider || closed || !sequence) return;
+      if (!provider || closed || !sequence || lastReview?.sequenceId === sequence.id) return;
       const cue = invitation.take(sequence, tools.currentAssessment, playback, practiceStartedAt,
-        conversationBusy || tools.isUserSpeaking || pendingTools > 0, Date.now());
+        conversationBusy || tools.isUserSpeaking || pendingTools > 0, Date.now(), practiceStage === 'performing');
       if (!cue) return;
-      conversationBusy = true;
+      conversationBusy = true; speechPurpose = 'invitation';
       provider.sendClientContent({ turns: [{ role: 'user', parts: [{ text:
         `DEMONSTRATION_FINISHED ${JSON.stringify({ sequenceId: sequence.id, cue })}. Application context, not a new movement request. The avatar has finished its initial demonstration. Speak this brief invitation once. Do not invoke tools, repeat a readiness announcement, claim the user has started, or claim overall correct form. Then leave quiet space for the person to get into position.` }] }], turnComplete: true });
+    }
+
+    function flushReview() {
+      if (!pendingReview || !provider || closed || conversationBusy || tools.isUserSpeaking || pendingTools > 0) return;
+      if (tools.currentSequence?.id !== pendingReview.review.sequenceId || (practiceStartedAt !== null && practiceStartedAt > pendingReview.endedAt)) { pendingReview = null; return; }
+      const { review } = pendingReview; pendingReview = null;
+      send({ type: 'practice_review', review }); conversationBusy = true; speechPurpose = 'review';
+      provider.sendClientContent({ turns: [{ role: 'user', parts: [{ text:
+        `PRACTICE_REVIEW ${JSON.stringify(review)}. Application review after a finished attempt, not a new movement request. Speak the supplied message once. For aligned, clearly acknowledge that the observed arm movement was performed well. For needs_adjustment, give only this one tip for the next full repetition. Missing evidence is not success. Never invoke tools, give ongoing corrections, ask for a checkpoint hold, or repeat this review.` }] }], turnComplete: true });
     }
 
     function receiveProvider(message: GeminiMessage) {
@@ -98,17 +110,17 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         const content = message.serverContent;
         // Keep speculative acknowledgments/refusals out of speech while a tool
         // is outstanding, including output bundled with the initial tool call.
-        const suppressOutput = pendingTools > 0 || Boolean(message.toolCall?.functionCalls?.length);
+        const suppressOutput = pendingTools > 0 || Boolean(message.toolCall?.functionCalls?.length) || (practiceStage === 'performing' && speechPurpose !== 'invitation');
         if (content?.interrupted) { tools.interrupt(); send({ type: 'interrupted' }); }
         // SDK 3.3 declares voiceActivityType, but the v1beta native-audio
         // endpoint also emits {type, audioOffset}. Both are provider boundaries;
         // inputTranscription.finished is optional and absent in observed speech.
         const activity: unknown = message.voiceActivity;
         const activityType = isRecord(activity) ? activity.voiceActivityType ?? activity.type : undefined;
-        if (activityType === 'ACTIVITY_START') { conversationBusy = true; tools.beginSpeech(); }
+        if (activityType === 'ACTIVITY_START') { conversationBusy = true; speechPurpose = 'conversation'; tools.beginSpeech(); }
         if (activityType === 'ACTIVITY_END') { conversationBusy = true; tools.endSpeech(); }
         if (content?.inputTranscription) {
-          if (content.inputTranscription.text?.trim()) conversationBusy = true;
+          if (content.inputTranscription.text?.trim()) { conversationBusy = true; speechPurpose = 'conversation'; }
           tools.noteInput(content.inputTranscription.text ?? '', content.inputTranscription.finished);
           if (content.inputTranscription.text) send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
         }
@@ -135,7 +147,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         // settling a tool promise alone does not mean that response was spoken.
         if (content?.turnComplete) {
           tools.finishTurn();
-          if (pendingTools === 0) { conversationBusy = false; send({ type: 'turn_complete' }); invitePractice(); }
+          if (pendingTools === 0) { conversationBusy = false; speechPurpose = 'conversation'; send({ type: 'turn_complete' }); flushReview(); invitePractice(); }
         }
       } catch { close('The conversation response could not be processed.'); }
     }
@@ -153,7 +165,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             if (!hasOnlyKeys(input, ['type', 'clientSentAt']) || typeof input.clientSentAt !== 'number' || !Number.isFinite(input.clientSentAt)) throw new Error('Invalid clock synchronization.');
             send({ type: 'clock', clientSentAt: input.clientSentAt, serverNow: now }); break;
           case 'context': {
-            if (!hasOnlyKeys(input, ['type', 'sequence', 'playback', 'practiceStartedAt'])) throw new Error('Invalid context.');
+            if (!hasOnlyKeys(input, ['type', 'sequence', 'playback', 'practiceStartedAt', 'practiceStage'])) throw new Error('Invalid context.');
+            if (input.practiceStage !== undefined && !['watching', 'ready', 'performing', 'review'].includes(String(input.practiceStage))) throw new Error('Invalid practice stage.');
+            practiceStage = typeof input.practiceStage === 'string' ? input.practiceStage : 'watching';
             const checked = input.sequence === null ? null : validateSequence(input.sequence, options.catalog ?? [], options.compositionPolicy);
             if (checked && !checked.ok) throw new Error('Unsupported sequence context.');
             const sequence = checked?.ok ? checked.sequence : null;
@@ -172,7 +186,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             if (tools.currentAssessment && accepted && accepted.id === sequence?.id &&
               JSON.stringify(sequence.steps) !== JSON.stringify(accepted.steps)) throw new Error('Sequence context conflicts with the accepted movement.');
             tools.setSequence(sequence);
-            invitePractice();
+            flushReview(); invitePractice();
             if (!initialized) {
               initialized = true;
               if (!options.geminiApiKey) { close('Gemini conversation provider is not configured on the backend.'); return; }
@@ -191,6 +205,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
           case 'audio':
             if (!hasOnlyKeys(input, ['type', 'data']) || !base64(input.data, 12_800)) throw new Error('Invalid microphone audio.');
             provider?.sendRealtimeInput({ audio: { data: input.data, mimeType: 'audio/pcm;rate=16000' } }); break;
+          case 'audio_end':
+            if (!hasOnlyKeys(input, ['type'])) throw new Error('Invalid audio stream end.');
+            provider?.sendRealtimeInput({ audioStreamEnd: true }); break;
           case 'image':
             if (!hasOnlyKeys(input, ['type', 'data', 'observedAt']) || !base64(input.data, 350_000) ||
               typeof input.observedAt !== 'number' || !Number.isFinite(input.observedAt)) throw new Error('Invalid camera frame.');
@@ -199,7 +216,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             provider?.sendRealtimeInput({ video: { data: input.data, mimeType: 'image/jpeg' } }); break;
           case 'text':
             if (!hasOnlyKeys(input, ['type', 'text']) || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 4000) throw new Error('Invalid text.');
-            conversationBusy = true; tools.noteTextInput(input.text);
+            conversationBusy = true; speechPurpose = 'conversation'; tools.noteTextInput(input.text);
             provider?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: input.text }] }], turnComplete: true }); break;
           case 'applied':
             if (!hasOnlyKeys(input, ['type', 'commandId', 'ok']) || typeof input.commandId !== 'string' || typeof input.ok !== 'boolean') throw new Error('Invalid action acknowledgment.');
@@ -207,30 +224,17 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
           case 'control':
             if (!hasOnlyKeys(input, ['type', 'name']) || !['pause_movement', 'resume_movement', 'stop_movement'].includes(String(input.name))) throw new Error('Invalid control.');
             void tools.control(input.name as 'pause_movement' | 'resume_movement' | 'stop_movement').catch(() => {}); break;
-          case 'form': {
-            const report = input.report;
+          case 'form':
+            // Legacy per-frame feedback is deliberately silent. Reviews require a finished attempt.
+            break;
+          case 'practice_attempt': {
             const sequence = tools.currentSequence;
-            if (!hasOnlyKeys(input, ['type', 'report']) || !isRecord(report) || !sequence || !playback || report.sequenceId !== sequence.id || report.stepIndex !== playback.stepIndex ||
-              typeof report.observedAt !== 'number' || !Number.isFinite(report.observedAt) || now - report.observedAt > 2000 || report.observedAt > now + 1000 ||
-              report.observedAt < Math.max(playback.updatedAt - (playback.phaseElapsedSeconds ?? 0) * 1000, practiceStartedAt ?? 0) ||
-              !['aligned', 'needs_adjustment', 'not_observable', 'unavailable'].includes(String(report.status))) break;
-            const plan = tools.currentAssessment;
-            const practice = practiceStartedAt !== null;
-            const checks = plan && practice ? currentAssessmentChecks(plan, sequence, playback, report.observedAt) : [];
-            const measurements = isRecord(report.measurements) ? report.measurements : {};
-            if (Object.keys(measurements).length > 6 || Object.values(measurements).some(n => n !== null && (typeof n !== 'number' || !Number.isFinite(n) || Math.abs(n) > 180))) break;
-            const assessment = assessMeasurements(checks, measurements as Record<string, number | null>);
-            const canonical = { sequenceId: sequence.id, stepIndex: playback.stepIndex,
-              mode: practice ? 'practice' as const : 'demonstration' as const, observedAt: report.observedAt as number, ...assessment };
-            if (pendingTools > 0 || conversationBusy || tools.isUserSpeaking) { feedbackSpeech.shouldSpeak(null, now); break; }
-            const speakFeedback = feedbackSpeech.shouldSpeak(canonical, now);
-            const key = JSON.stringify([sequence.id, playback.stepIndex, canonical.mode, assessment.status, assessment.checkId, assessment.message]);
-            if (!speakFeedback && key === lastFeedbackContext) break;
-            lastFeedbackContext = key;
-            if (speakFeedback) conversationBusy = true;
-            provider?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `DETERMINISTIC_FORM_STATUS ${JSON.stringify({
-              ...canonical,
-            })}. This is application context, not a new user request. Do not invoke movement tools.${speakFeedback ? ' Speak the supplied message once, using its exact words. Do not add a broader form or safety judgment.' : ' Retain as context; no spoken update is requested.'}` }] }], turnComplete: speakFeedback });
+            if (!hasOnlyKeys(input, ['type', 'attempt']) || !sequence || practiceStage !== 'review') break;
+            const attempt = validatePracticeAttempt(input.attempt, sequence.id, now);
+            if (reviewed.has(attempt.attemptId) || reviewed.size >= 128) break;
+            const review = reviewPracticeAttempt(sequence, tools.currentAssessment, attempt, lastReview);
+            reviewed.add(attempt.attemptId); lastReview = review;
+            pendingReview = { review, endedAt: attempt.endedAt }; flushReview();
             break;
           }
           default: throw new Error('Unknown message.');

@@ -6,7 +6,8 @@ import { AnatomyViewport } from '../anatomy/AnatomyViewport';
 import { createWallAngelReference } from '../anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../anatomy/wallAngel';
 import { LiveClient } from '../live/LiveClient';
-import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
+import type { LiveAction, LiveControl } from '../live/protocol';
+import type { PracticeReview } from '../shared/practice';
 import type { PlaybackState, PoseObservation } from '../shared/contracts';
 import { plannedAvatarView } from '../shared/presentation';
 import type { LiveAudio } from '../voice/LiveAudio.types';
@@ -14,9 +15,8 @@ import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveA
 import { getCameraPermission, requestCameraPermission } from 'react-native-pose-detection';
 import { CameraPoseView } from '../vision/CameraPoseView';
 import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/landmarks';
-import { evaluateAdaptiveForm } from '../vision/adaptiveForm';
-import { PracticeSession } from '../vision/practiceSession';
-import type { PracticeSnapshot } from '../vision/practiceSession';
+import { SelfPacedPractice, type SelfPacedSnapshot } from '../vision/selfPacedPractice';
+import { MicrophoneSilenceGate } from '../voice/microphoneGate';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { appendCleanup } from './cleanup';
@@ -34,7 +34,8 @@ export function LiveCoachScreen() {
   const healthRequest = useRef<AbortController | null>(null);
   const observation = useRef<PoseObservation | null>(null);
   const poseClock = useRef<number | null>(null);
-  const practiceSession = useRef(new PracticeSession());
+  const practiceSession = useRef(new SelfPacedPractice());
+  const microphoneGate = useRef(new MicrophoneSilenceGate());
   const counters = useRef({ microphone: 0, images: 0, peak: 0 });
   const [stats, setStats] = useState({ microphone: 0, images: 0, peak: 0 });
   const [mode, setMode] = useState<'live' | 'local' | null>(null);
@@ -42,10 +43,11 @@ export function LiveCoachScreen() {
   const [message, setMessage] = useState('Start a live session, or test the camera, microphone and speaker locally.');
   const [planning, setPlanning] = useState(false);
   const [cameraWarning, setCameraWarning] = useState('');
-  const [report, setReport] = useState<FormReport | null>(null);
-  const [practiceView, setPracticeView] = useState<PracticeSnapshot>({ sequence: null, playback: null, startedAt: null });
-  const lastReport = useRef('');
-  const lastFormSentAt = useRef(0);
+  const [report, setReport] = useState<PracticeReview | null>(null);
+  const [practiceView, setPracticeView] = useState<SelfPacedSnapshot>({ stage: 'watching', recordingId: null, startedAt: null,
+    attempt: null, review: null, message: 'Watch the demonstration first.' });
+  const lastAttemptSent = useRef('');
+  const lastPracticeId = useRef('');
   const [turns, setTurns] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const [text, setText] = useState('Show me a wall angel demonstration, then return to a goalpost position.');
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -55,7 +57,7 @@ export function LiveCoachScreen() {
     healthRequest.current?.abort(); healthRequest.current = null;
     client.current?.stop(); client.current = null;
     const previous = audio.current; audio.current = null;
-    observation.current = null; poseClock.current = null; practiceSession.current.reset(); lastReport.current = '';
+    observation.current = null; poseClock.current = null; practiceSession.current.reset(); lastAttemptSent.current = ''; lastPracticeId.current = ''; microphoneGate.current.reset();
     latest.current.reset();
     if (mounted.current) { setPending(true); setMode(null); setPlanning(false); setReport(null); setPracticeView(practiceSession.current.snapshot); }
     stopping.current = appendCleanup(stopping.current, previous ? () => previous.stop() : undefined);
@@ -74,28 +76,26 @@ export function LiveCoachScreen() {
   }, [stop]);
 
   useEffect(() => {
-    client.current?.send({ type: 'context', sequence: session.sequence, playback: practiceView.playback ?? session.playback, practiceStartedAt: practiceView.startedAt });
+    client.current?.send({ type: 'context', sequence: session.sequence, playback: session.playback, practiceStartedAt: practiceView.startedAt, practiceStage: practiceView.stage });
   }, [session.sequence, session.playback, practiceView]);
 
   const evaluate = useCallback(() => {
     const context = latest.current;
     const now = Date.now();
-    const view = practiceSession.current.update(context.sequence, context.assessmentPlan,
-      context.paused && context.playback ? { ...context.playback, status: 'paused' } : context.playback, observation.current, now);
-    const active = view.playback ?? context.playback;
-    const playback = context.paused && active ? { ...active, status: 'paused' as const } : active;
-    const result = evaluateAdaptiveForm(context.sequence, context.assessmentPlan, playback, observation.current, now, view.startedAt);
-    const key = result ? JSON.stringify([result.sequenceId, result.stepIndex, result.status, result.mode, result.checkId, result.message]) : '';
+    const view = practiceSession.current.update(context.sequence, context.assessmentPlan, context.playback, observation.current, now, context.paused);
     if (mounted.current) {
       setPracticeView(previous => previous === view ? previous : view);
-      const changed = key !== lastReport.current;
-      if (changed) { lastReport.current = key; setReport(result); }
-      if (result && (changed || Date.now() - lastFormSentAt.current >= 250)) {
-        // Context must arrive before evidence from a newly started replay/phase.
-        client.current?.send({ type: 'context', sequence: context.sequence, playback, practiceStartedAt: view.startedAt });
-        lastFormSentAt.current = Date.now(); client.current?.send({ type: 'form', report: result });
+      if (view.stage === 'performing') {
+        setReport(previous => previous === null ? previous : null);
+        if (view.recordingId !== lastPracticeId.current) { audio.current?.interrupt(); lastPracticeId.current = view.recordingId ?? ''; }
+      }
+      if (view.review) setReport(previous => previous?.attemptId === view.review!.attemptId ? previous : view.review);
+      if (view.attempt && view.attempt.attemptId !== lastAttemptSent.current && client.current) {
+        client.current.send({ type: 'context', sequence: context.sequence, playback: context.playback, practiceStartedAt: view.startedAt, practiceStage: view.stage });
+        client.current.send({ type: 'practice_attempt', attempt: view.attempt }); lastAttemptSent.current = view.attempt.attemptId;
       }
     }
+    return view;
   }, []);
   useEffect(() => {
     if (!mode) return;
@@ -140,8 +140,17 @@ export function LiveCoachScreen() {
             if (action.type === 'play_sequence') {
               const checked = latest.current.acceptSequence(action.sequence, action.assessmentPlan, action.presentationPlan);
               if (!checked.ok) throw new Error(checked.error);
-              practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastReport.current = '';
+              practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastAttemptSent.current = '';
             } else if (action.type === 'set_avatar_view') latest.current.setAvatarView(action.view);
+            else if (action.type === 'start_practice') {
+              evaluate(); practiceSession.current.requestStart(); setReport(null);
+              const view = evaluate();
+              client.current?.send({ type: 'context', sequence: latest.current.sequence, playback: latest.current.playback,
+                practiceStartedAt: view.startedAt, practiceStage: view.stage });
+            } else if (action.type === 'finish_practice') {
+              if (practiceSession.current.snapshot.stage !== 'performing') throw new Error('No repetition is currently being recorded.');
+              practiceSession.current.finish(Date.now()); evaluate();
+            }
             else if (action.type === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
             else if (action.type === 'pause_movement') latest.current.setPaused(true);
             else if (action.type === 'resume_movement') latest.current.setPaused(false);
@@ -153,6 +162,7 @@ export function LiveCoachScreen() {
             if (event.type === 'interrupted') audio.current?.interrupt();
             if (event.type === 'turn_complete') audio.current?.finishReply();
             if (event.type === 'planning') setPlanning(event.active);
+            if (event.type === 'practice_review' && event.review.attemptId === practiceSession.current.snapshot.attempt?.attemptId) setReport(event.review);
             if (event.type === 'transcript') setTurns(previous => {
               const last = previous.at(-1);
               return last?.role === event.role ? [...previous.slice(0, -1), { role: event.role, text: (last.text + event.text).slice(-4000) }] :
@@ -166,10 +176,17 @@ export function LiveCoachScreen() {
       }
       if (run !== epoch.current || !mounted.current) return;
       const driver = createLiveAudio(); audio.current = driver;
-      await driver.start((data, peak) => {
+      microphoneGate.current.reset();
+      await driver.start((data, peak, durationMs = 100) => {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
-        if (streamMicrophone) client.current?.send({ type: 'audio', data });
+        if (streamMicrophone) {
+          try {
+            const packets = microphoneGate.current.push({ data, peak, durationMs });
+            for (const packet of packets.audio) client.current?.send({ type: 'audio', data: packet });
+            if (packets.audioStreamEnd) client.current?.send({ type: 'audio_end' });
+          } catch { void stop('Microphone audio could not be processed. Restart the live session.'); }
+        }
       }, error => { if (run === epoch.current) void stop(error); }, warning => {
         if (run === epoch.current && mounted.current) setMessage(warning);
       });
@@ -193,10 +210,9 @@ export function LiveCoachScreen() {
     observation.current = toPoseObservation(frame, Date.now()); evaluate();
   }
   function recordPlayback(value: PlaybackState) {
-    if (practiceSession.current.recordPlayback(value)) { setPracticeView(practiceSession.current.snapshot); evaluate(); }
-    else latest.current.recordPlayback(value);
+    latest.current.recordPlayback(value);
   }
-  const activePlayback = practiceView.playback ?? session.playback;
+  const activePlayback = session.playback;
   const connectionMarker = pending ? 'live-starting' : mode === 'live' ? 'live-connected' : mode === 'local' ? 'live-local-ready' : 'live-stopped';
   const playbackMarker = !session.sequence ? 'idle' : !activePlayback ? 'preparing' :
     activePlayback.status === 'playing' ? 'active' : activePlayback.status;
@@ -229,12 +245,14 @@ export function LiveCoachScreen() {
           {!!cameraWarning && <Text style={styles.note}>{cameraWarning}</Text>}
           <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
         </>}
-        <AnatomyViewport sequence={practiceView.sequence ?? session.sequence} paused={session.paused}
+        <AnatomyViewport sequence={session.sequence} paused={session.paused}
           viewPreference={session.avatarView}
           automaticView={plannedAvatarView(session.presentationPlan, session.sequence, activePlayback?.stepIndex ?? 0)}
           onPlaybackChange={recordPlayback} showLab={false} compact />
-        {session.assessmentPlan?.checks.length ? <Text testID={practiceView.startedAt === null ? 'live-practice-waiting' : 'live-practice-active'} style={styles.note}>{practiceView.startedAt === null ? 'After watching, hold the starting arm position to begin practice automatically.' : 'Follow the movement. The camera checks the selected arm positions while you practice.'}</Text> : null}
-        <Text testID={`live-form-${report?.mode ?? 'none'}`} style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
+        {session.assessmentPlan?.checks.length ? <Text testID={practiceView.stage === 'performing' ? 'live-practice-active' : practiceView.stage === 'review' ? 'live-practice-review' : 'live-practice-waiting'} style={styles.note}>{practiceView.message}</Text> : null}
+        <View testID={`live-form-${practiceView.startedAt === null ? 'demonstration' : 'practice'}`}>
+          <Text testID={`live-review-${report?.status ?? 'none'}`} style={styles.status}>{report?.message ?? (practiceView.stage === 'performing' ? 'Recording quietly. Say “I’m done” for your review.' : 'No repetition review yet.')}</Text>
+        </View>
         {session.sequence && <>
           <Text style={styles.note}>{activePlayback ? `Step ${activePlayback.stepIndex + 1} · ${activePlayback.phase} · ${activePlayback.status}` : 'Preparing demonstration…'}</Text>
           <View style={styles.row}>

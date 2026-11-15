@@ -95,6 +95,21 @@ test('uncertain clock synchronization fails closed before provider initializatio
   assert.equal(socket.messages.some(message => message.type === 'context'), false);
 });
 
+test('practice evidence timestamps are calibrated without mutating local observations', async () => {
+  const socket = new FakeSocket();
+  const client = new LiveClient({ baseUrl: 'http://localhost:3001', socketFactory: () => socket, now: () => 1000,
+    context: { type: 'context', sequence: null, playback: null }, apply: () => {}, onMessage: () => {}, onClose: () => {} });
+  const starting = client.start(); socket.open(5000);
+  socket.receive({ type: 'ready', conversationModel: 'fixture', plannerModel: 'fixture' }); await starting;
+  const attempt = { sequenceId: 's', attemptId: 'a', startedAt: 800, endedAt: 1000,
+    samples: [{ observedAt: 900, measurements: { left_elbow_bend: 90 } }] };
+  client.send({ type: 'practice_attempt', attempt });
+  const wire = socket.messages.at(-1)!.attempt as typeof attempt;
+  assert.equal(wire.startedAt, 5800); assert.equal(wire.endedAt, 6000); assert.equal(wire.samples[0].observedAt, 5900);
+  assert.equal(attempt.startedAt, 800); assert.equal(attempt.samples[0].observedAt, 900);
+  client.stop();
+});
+
 test('asymmetric synchronization delays cannot let an expired action run before its cancellation arrives', async () => {
   for (const skew of [-120000, 120000]) for (const outbound of [0, 1800]) {
     const socket = new FakeSocket(); let applied = 0; let serverNow = 1000;

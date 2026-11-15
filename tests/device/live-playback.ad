@@ -26,9 +26,16 @@ scroll down --until 'id="live-resume"'
 press 'id="live-resume"'
 wait 'id="live-playback-active"' 5000
 wait 'id="live-playback-completed"' 30000
-scroll down --until 'id="live-practice-waiting"'
-wait 'id="live-form-demonstration"' 10000
-wait 'id="live-connected"' 5000
+scroll down --until 'id="live-form-practice"'
+wait 'id="live-practice-active"' 15000
+scroll down --until 'id="live-request"'
+fill 'id="live-request"' "I'm done."
+keyboard dismiss
+scroll down --until 'id="live-send"'
+press 'id="live-send"'
+scroll top
+scroll down --until 'id="live-form-practice"'
+wait 'id="live-review-not_observable"' 15000
 scroll down --until 'id="live-clear"'
 press 'id="live-clear"'
 wait 'id="live-playback-idle"' 5000

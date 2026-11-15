@@ -26,6 +26,7 @@ export class ToolController {
   private calls = new Map<string, Promise<ToolResult>>();
   private requestsThisTurn = 0;
   private usedView = false;
+  private usedPractice = false;
   private closed = false;
   private speechBoundaries = false;
   private inputWaiters = new Set<() => void>();
@@ -49,7 +50,7 @@ export class ToolController {
   private wakeInput() { for (const resolve of this.inputWaiters) resolve(); this.inputWaiters.clear(); }
   private beginTurn(preserveWaiting = false) {
     if (!preserveWaiting) this.cancel();
-    this.utterance = ''; this.usedPlan = false; this.usedView = false; this.requestsThisTurn = 0;
+    this.utterance = ''; this.usedPlan = false; this.usedView = false; this.usedPractice = false; this.requestsThisTurn = 0;
     this.awaitingInput = false; this.inputOpen = true;
   }
   noteTextInput(text: string) { this.beginTurn(); this.noteInput(text, true); }
@@ -111,6 +112,17 @@ export class ToolController {
   }
   private async run(call: ToolCall): Promise<ToolResult> {
     if (this.closed) return { ok: false, message: 'Session is closed.' };
+    if (call.name === 'start_practice' || call.name === 'finish_practice') {
+      if (call.args !== undefined && (!isRecord(call.args) || !hasOnlyKeys(call.args, []))) return { ok: false, message: 'Unexpected practice arguments.' };
+      const inputError = this.inputOpen || !this.utterance.trim() ? await this.waitForInput(call.id!) : null;
+      if (inputError) return inputError;
+      if (!this.sequence || !this.assessment?.checks.length || this.usedPractice) return { ok: false, message: 'No assessable movement or practice request already handled. Wait for a new user request.' };
+      this.usedPractice = true;
+      await this.options.apply({ type: call.name }, new AbortController().signal);
+      return { ok: true, message: call.name === 'start_practice'
+        ? 'Practice recording is armed. Stay quiet and let the user perform the whole movement at their own pace. Do not give corrections or invent a form observation.'
+        : 'Recording ended. Wait quietly for the application review; do not invent feedback.' };
+    }
     if (call.name === 'set_avatar_view') {
       if (!isRecord(call.args) || !hasOnlyKeys(call.args, ['view']) || !isAvatarViewPreference(call.args.view)) return { ok: false, message: 'Unsupported avatar view.' };
       const inputError = this.inputOpen || !this.utterance.trim() ? await this.waitForInput(call.id!) : null;

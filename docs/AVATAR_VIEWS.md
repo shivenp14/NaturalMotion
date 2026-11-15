@@ -1,5 +1,7 @@
 # Automatic avatar views and smooth rotation
 
+Current practice and speech behavior is described in [SELF_PACED_PRACTICE.md](SELF_PACED_PRACTICE.md). Avatar views remain independent of the camera-derived repetition clock.
+
 The movement planner selects a view for each timed group using the requested movement, the component's curated muscle-region highlights and explicit user preferences. Supported views are front, back, right side (`side`, preserving the existing ID), and left side (`left_side`). The planner is instructed to keep a stable view unless a change adds useful information.
 
 The backend expands each group's `view` into a separate `PresentationPlan`, tied to the movement ID. The app validates every step index and view before accepting the sequence. Arbitrary camera transforms are rejected. Movement execution and assessment retain their existing meaning; presentation does not measure muscle activation or alter the person's required camera orientation.

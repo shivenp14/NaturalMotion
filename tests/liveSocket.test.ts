@@ -12,6 +12,7 @@ import { wallAngelDefaults } from '../src/anatomy/wallAngel';
 import type { LiveAction } from '../src/live/protocol';
 import { validateAssessmentPlan } from '../src/vision/assessmentPlan';
 import { validatePresentationPlan } from '../src/shared/presentation';
+import { syntheticPracticeAttempt } from './fixtures/practiceAttempt';
 
 test('live provider tool travels through the real planner validator and requires app acknowledgment', async t => {
   const sequence = createWallAngelReference(wallAngelDefaults, 'live-wire');
@@ -127,21 +128,31 @@ test('live provider tool travels through the real planner validator and requires
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
   socket.send(JSON.stringify({ type: 'context', sequence: latest.sequence, playback: {
     sequenceId: latest.sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
-  }, practiceStartedAt: now }));
+  }, practiceStartedAt: now - 3500, practiceStage: 'performing' }));
   const contextsBefore = context.length;
   socket.send(JSON.stringify({ type: 'form', report: { sequenceId: latest.sequence.id, stepIndex: 1,
     checkId: 'invented', observedAt: now, status: 'aligned', message: 'Invented perfect form', measurements: { left_forearm_direction: 180 } } }));
-  // Reclassify measurements against the accepted plan; do not speak on one frame.
-  await until(() => context.length > contextsBefore);
-  const feedback = context.at(-1)!;
-  assert.equal(feedback.turnComplete, false);
-  const text = feedback.turns?.[0]?.parts?.[0]?.text ?? '';
-  assert.match(text, /needs_adjustment/); assert.match(text, /practice/); assert.match(text, /left_forearm_direction/);
-  assert.doesNotMatch(text, /Invented perfect form/);
+  socket.send(JSON.stringify({ type: 'clock', clientSentAt: 1001 }));
+  await until(() => messages.some(message => message.type === 'clock' && message.clientSentAt === 1001));
+  assert.equal(context.length, contextsBefore, 'Per-frame form reports cannot prompt ongoing correction speech.');
+  const audioBefore = messages.filter(message => message.type === 'audio').length;
+  receive(Object.assign(new ProviderMessage(), { serverContent: { outputTranscription: { text: 'Bend your left elbow more.' },
+    modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] }, turnComplete: true } }));
+  assert.equal(messages.filter(message => message.type === 'audio').length, audioBefore, 'The performing stage suppresses unsolicited corrective output.');
   socket.send(JSON.stringify({ type: 'form', report: { sequenceId: latest.sequence.id, stepIndex: 1,
     observedAt: now + 1, status: 'aligned', measurements: {} } }));
-  await until(() => context.length > contextsBefore + 1);
-  assert.match(context.at(-1)!.turns?.[0]?.parts?.[0]?.text ?? '', /not_observable/);
+  socket.send(JSON.stringify({ ...completionContext, practiceStartedAt: now - 3500, practiceStage: 'review' }));
+  const attempt = syntheticPracticeAttempt(latest.sequence, now - 3500);
+  socket.send(JSON.stringify({ type: 'practice_attempt', attempt }));
+  await until(() => messages.some(message => message.type === 'practice_review'));
+  const review = messages.find(message => message.type === 'practice_review')!.review as { status: string; message: string };
+  assert.equal(review.status, 'aligned'); assert.match(review.message, /looked good/);
+  assert.match(context.at(-1)!.turns?.[0]?.parts?.[0]?.text ?? '', /PRACTICE_REVIEW/);
+  const afterReview = context.length;
+  socket.send(JSON.stringify({ type: 'practice_attempt', attempt }));
+  socket.send(JSON.stringify({ type: 'clock', clientSentAt: 1002 }));
+  await until(() => messages.some(message => message.type === 'clock' && message.clientSentAt === 1002));
+  assert.equal(context.length, afterReview, 'One completed attempt produces only one spoken review.');
   assert.equal(JSON.stringify(messages).includes('mock-openai'), false); assert.equal(JSON.stringify(messages).includes('mock-gemini'), false);
   const altered = structuredClone(latest.sequence);
   const step = altered.steps[0]; assert.ok('parallel' in step);

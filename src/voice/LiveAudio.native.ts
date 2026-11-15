@@ -78,7 +78,7 @@ export function createLiveAudio(): LiveAudio {
         if (buffer.sampleRate !== 16000) { onError('Microphone did not produce the required 16 kHz stream.'); return; }
         const samples = buffer.getChannelData(0).subarray(0, numFrames);
         let peak = 0; for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
-        onAudio(encodePcm16(samples), peak);
+        onAudio(encodePcm16(samples), peak, numFrames / 16000 * 1000);
       });
       if (configured.status === 'error') throw new Error(configured.message);
       recorder.onError(() => { if (active) onError('Microphone recording failed.'); });

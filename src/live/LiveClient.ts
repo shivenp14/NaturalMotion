@@ -110,6 +110,9 @@ export class LiveClient {
     let wire = message;
     if (message.type === 'image') wire = { ...message, observedAt: message.observedAt + offset };
     if (message.type === 'form') wire = { ...message, report: { ...message.report, observedAt: message.report.observedAt + offset } };
+    if (message.type === 'practice_attempt') wire = { ...message, attempt: { ...message.attempt,
+      startedAt: message.attempt.startedAt + offset, endedAt: message.attempt.endedAt + offset,
+      samples: message.attempt.samples.map(sample => ({ ...sample, observedAt: sample.observedAt + offset })) } };
     if (message.type === 'context') wire = { ...message,
       playback: message.playback ? { ...message.playback, updatedAt: message.playback.updatedAt + offset } : null,
       ...(typeof message.practiceStartedAt === 'number' ? { practiceStartedAt: message.practiceStartedAt + offset } : {}) };

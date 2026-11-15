@@ -2,6 +2,8 @@
 
 ## Adaptive-form branch update
 
+Current live behavior is [self-paced practice with one review after the full repetition](SELF_PACED_PRACTICE.md). Playback-timed, per-frame correction descriptions below are historical. Voice practice start/finish, automatic retries, positive improvement feedback and speech/transcription mitigations are covered in that current handoff.
+
 The live path now supports planner-selected, validated geometric assessment and automatic practice replay. See [ADAPTIVE_FORM_COACHING.md](ADAPTIVE_FORM_COACHING.md) for the current runtime contract, UI integration boundary, phone evidence and human acceptance steps. References below to the final-goalpost button describe the earlier baseline.
 
 The Android `/live` route connects conversation, bounded movement planning, anatomy playback and one verified camera check. This is an integration screen; Roland can replace its layout while retaining the session/media boundaries.

@@ -1,5 +1,7 @@
 # Movement-matched assessment and automatic practice
 
+> **Current runtime:** see [SELF_PACED_PRACTICE.md](SELF_PACED_PRACTICE.md). Live practice now records a whole self-paced repetition and gives one retrospective review, including positive acknowledgment and improvement recognition. The playback-timed grading/readiness description below records the earlier implementation and is superseded.
+
 This branch replaces the live screen's fixed final-goalpost button with planner-selected geometric checks and automatic practice entry. [Automatic avatar views and smooth rotation](AVATAR_VIEWS.md) add presentation choices without changing assessment geometry. Final UI design remains with Roland. Shoulder/armpit deformation remains optional issue #11.
 
 ## Runtime boundary
