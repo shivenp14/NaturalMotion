@@ -1,3 +1,4 @@
+import { availableExecutableMovements } from './executableMovements';
 import { initialUpperBodyPose } from './upperBodyPose';
 import { validateUpperBodyComposition } from './upperBodySequence';
 import { coachingCatalog } from '../vision/checks/registry';
@@ -9,6 +10,7 @@ export const anatomyAgentCapabilities = {
   allowPlaybackEdits: false,
   movementGuidance: {
     purpose: 'Educational upper-body animation only; not treatment or a measurement of human range of motion.',
+    executableMovements: availableExecutableMovements(coachingCatalog),
     stepFormat: 'Use timed parallel groups only, including for a single command.',
     initialPose: initialUpperBodyPose(),
     componentChannels: {

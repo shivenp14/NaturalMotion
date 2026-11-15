@@ -190,7 +190,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             if (!initialized) {
               initialized = true;
               if (!options.geminiApiKey) { close('Gemini conversation provider is not configured on the backend.'); return; }
-              const connect = options.connectConversation ?? geminiConnector(options.geminiApiKey, options.conversationModel, options.geminiApiVersion);
+              const connect = options.connectConversation ?? geminiConnector(options.geminiApiKey, options.conversationModel, options.geminiApiVersion, options.catalog);
               void connect({ message: receiveProvider,
                 error: () => close('Conversation provider failed. Check the backend key, model access and API version.'),
                 close: () => close('Conversation provider disconnected. Start a new session.'),

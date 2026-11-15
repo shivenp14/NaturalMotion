@@ -15,6 +15,7 @@ test('starting and finishing practice uses the current assessment without genera
   const controller = new ToolController({ plan: async () => { plans++; return { sequence, assessmentPlan, message: '' }; },
     apply: async action => { applied.push(action); }, onPlanning: () => {} });
   controller.noteTextInput('Show a wall angel.'); assert.equal((await controller.handle(call('demo'))).ok, true);
+  assert.equal((await controller.handle({ id: 'camera-finish', name: 'finish_practice', args: {} })).ok, false, 'The old demonstration utterance cannot finish a recording.');
   controller.noteTextInput('I am doing it now.');
   const start = { id: 'start', name: 'start_practice', args: {} };
   assert.equal((await controller.handle(start)).ok, true); assert.equal((await controller.handle(start)).ok, true);
