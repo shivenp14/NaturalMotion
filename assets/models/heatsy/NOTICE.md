@@ -35,6 +35,10 @@ Z-Anatomy's models are derived from BodyParts3D. We use BodyParts3D only through
 
 `data/muscles.json` (the part, muscle and group vocabulary) and `data/za_map.json` (the part to Z-Anatomy object map) were written by DDDEV LTD. They are released under CC BY-SA 4.0 with the model.
 
+## Changes made by NaturalMotion
+
+`body-smoothed.glb` is an adaptation of the original `body.glb` under CC BY-SA 4.0. NaturalMotion smoothed and renormalized the skin weights over connected mesh faces and added continuous torso-origin weight anchors for trapezius, lats and pectoralis major to reduce visible tearing during animation. Geometry, anatomical part IDs, bones and bind matrices remain unchanged. The app also applies cosmetic materials, region highlighting and authored bone poses. These changes do not add anatomical structures or simulate muscle activation.
+
 ## No endorsement, no warranty
 
 The creators and licensors of Z-Anatomy and BodyParts3D do not endorse Heatsy or DDDEV LTD. The licensed material is provided as is, without warranties of any kind, as stated in the licences.

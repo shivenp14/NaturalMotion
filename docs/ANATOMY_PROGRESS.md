@@ -2,6 +2,8 @@
 
 Shiven's first milestone is in progress. The approved baseline is the free Heatsy body model, with a cleaner finish inspired by the provided gray anatomical reference.
 
+The first agreed movement is now a wall angel. A development-only pose/playback proof and an adapted skin-weight asset are implemented; see [wall-angel progress](WALL_ANGEL_PROGRESS.md) for current parameters, verification and remaining deformation issues. The sections below describe the original viewer pass.
+
 ## Implemented
 
 - One actual rigged body, bundled locally rather than loaded from a third-party service.
@@ -30,7 +32,7 @@ Rendering dependencies were added to `package.json` and `package-lock.json`: Rea
 ## Still required for the milestone
 
 - Test performance on the physical Android 17 presentation phone. Native rendering, view controls, region highlighting, and reload have now passed on the local Android 17 emulator through Expo Go; see [Android test results](ANDROID17_TEST_RESULTS.md). This does not establish physical-phone performance or custom development-build compatibility.
-- Choose the first movement family with Derrick, using only represented muscle regions for the demonstration's highlights.
+- Refine the agreed wall-angel movement with Derrick, using only represented muscle regions for the demonstration's highlights.
 - Prove that movement deforms acceptably on this rig before registering its components.
 
 No movement has been clinically validated, prescribed, or registered by this visual-finish work.
