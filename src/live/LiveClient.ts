@@ -19,6 +19,7 @@ export class LiveClient {
   private cancelled = new Set<string>();
   private rejectStart: ((error: Error) => void) | null = null;
   private startTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingContext: Extract<LiveClientMessage, { type: 'context' }> | null = null;
   constructor(private readonly options: LiveClientOptions) {}
   start(): Promise<void> {
     if (this.active) return Promise.reject(new Error('Live session is already started.'));
@@ -45,7 +46,12 @@ export class LiveClient {
           const input: unknown = JSON.parse(String(event.data));
           if (!isRecord(input) || typeof input.type !== 'string') throw new Error('Invalid live response.');
           if (input.type === 'error') { fail(typeof input.message === 'string' ? input.message : 'Live backend failed.'); return; }
-          if (input.type === 'ready') { this.ready = true; clearTimeout(timer); this.rejectStart = null; resolve(); }
+          if (input.type === 'ready') {
+            this.ready = true; clearTimeout(timer); this.rejectStart = null;
+            const pending = this.pendingContext; this.pendingContext = null;
+            if (pending) this.send(pending);
+            resolve();
+          }
           if (input.type === 'cancel' && typeof input.commandId === 'string') this.cancelled.add(input.commandId);
           if (input.type === 'action') {
             if (typeof input.commandId !== 'string' || !isRecord(input.action) ||
@@ -69,12 +75,15 @@ export class LiveClient {
     });
   }
   send(message: LiveClientMessage, initializing = false) {
-    if (!this.active || (!this.ready && !initializing) || this.socket?.readyState !== 1) return;
+    if (!this.active) return;
+    if (!this.ready && !initializing) { if (message.type === 'context') this.pendingContext = message; return; }
+    if (this.socket?.readyState !== 1) return;
     if (this.socket.bufferedAmount > 256000) { this.stop(); this.options.onClose('Network cannot keep up with live media. Restart the session.'); return; }
     this.socket.send(JSON.stringify(message));
   }
   stop() {
     this.active = false; this.ready = false;
+    this.pendingContext = null;
     if (this.startTimer) clearTimeout(this.startTimer); this.startTimer = null;
     this.rejectStart?.(new Error('Live session cancelled.')); this.rejectStart = null;
     const socket = this.socket; this.socket = null;

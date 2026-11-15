@@ -38,3 +38,13 @@ test('no camera callbacks cannot preserve an aligned form result', () => {
   assert.equal(lost?.status, 'not_observable'); assert.equal(lost?.observedAt, 3501);
   assert.equal(evaluator.evaluate(sequence, { ...playback, sequenceId: 'other' }, observation(3600), 3600, 1500), null);
 });
+
+test('short demonstration holds stay unavailable while explicit final practice remains supported', () => {
+  const short = structuredClone(sequence); const final = short.steps[1]; assert.ok('parallel' in final); final.holdSeconds = 0.1;
+  assert.equal(deriveFormPlan(short, 0.6).has(1), false);
+  assert.equal(deriveFormPlan(short).has(1), true);
+  const evaluator = new SequenceFormEvaluator();
+  const holding = { ...playback, phase: 'holding' as const, status: 'playing' as const };
+  assert.equal(evaluator.evaluate(short, holding, observation(2000), 2000)?.status, 'unavailable');
+  assert.equal(evaluator.evaluate(short, playback, observation(2100), 2100, 1500)?.mode, 'practice');
+});

@@ -305,3 +305,40 @@ test('silence retries are bounded and stop cancels queued retries', async () => 
   await flush();
   assert.equal(recognizer.started, 6);
 });
+
+test('session controls notify shutdown completion once after pending native cleanup', async () => {
+  let utterance!: (text: string) => void;
+  let release!: () => void;
+  let stopCalls = 0; let stopped = 0;
+  const shutdown = new Promise<void>(resolve => { release = resolve; });
+  const phases: SessionPhase[] = [];
+  const coordinator = new TurnCoordinator({
+    voice: { listen: async callback => { utterance = callback; }, speak: async () => {},
+      stop: async () => { if (++stopCalls >= 2) await shutdown; } },
+    agent: { respond: async () => ({ decisionId: 'stop', trigger: { type: 'user_utterance', id: 'stop' },
+      actions: [{ type: 'stop_session', reason: 'user_request' }] }) },
+    getContext: () => ({ catalog: [], currentSequence: null }), onSequence: () => {}, onPlaybackAction: () => {},
+    onPhase: phase => phases.push(phase), onStopped: () => { stopped++; },
+  });
+  await coordinator.start(); utterance('Stop.'); await flush();
+  assert.equal(stopCalls, 2); assert.equal(stopped, 0); assert.notEqual(phases.at(-1), 'idle');
+  const repeated = coordinator.stop(); assert.equal(stopCalls, 2);
+  release(); await repeated; await flush();
+  assert.equal(stopped, 1); assert.equal(phases.at(-1), 'idle');
+});
+
+test('unsupported playback actions reject the full batch before sequence dispatch', async () => {
+  const recognizer = new FakeRecognizer(); let committed = 0; const errors: unknown[] = [];
+  const catalog = [{ id: 'fixture', label: 'Fixture', parameters: { angle: { minimum: 0, maximum: 2 } },
+    muscleRegionIds: [], cameraView: 'test', requiredLandmarks: [], supportedCheckIds: [] }];
+  const sequence = { id: 'fixture', steps: [{ componentId: 'fixture', parameters: { angle: 1 } }] };
+  const coordinator = new TurnCoordinator({ voice: new DeviceVoiceAdapter(recognizer, new FakeSpeech()),
+    agent: { respond: async () => ({ decisionId: 'fixture', trigger: { type: 'user_utterance', id: 'fixture' }, actions: [
+      { type: 'play_sequence', sequence }, { type: 'replay_demonstration', stepIndex: 0 },
+    ] }) }, getContext: () => ({ catalog, currentSequence: null }), onSequence: () => { committed++; },
+    onPlaybackAction: () => { throw new Error('Must not dispatch.'); }, supportedPlaybackActions: ['pause_session', 'stop_session'],
+    onPhase: () => {}, onError: error => errors.push(error),
+  });
+  await coordinator.start(); recognizer.emit('result', { isFinal: true, results: [{ transcript: 'Demonstrate.' }] }); await flush();
+  assert.equal(committed, 0); assert.equal(errors.length, 1); await coordinator.stop();
+});

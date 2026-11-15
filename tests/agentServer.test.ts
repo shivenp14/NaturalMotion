@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
+import { request as httpRequest } from 'node:http';
 import { generateAgentReturn, parseAgentRequest } from '../server/agent';
 import { createAgentServer } from '../server/http';
 
@@ -86,4 +87,23 @@ test('canonical simultaneous sequences cross HTTP unchanged and require policy a
     fetch: async () => Response.json(output) }), /execution is not configured/);
   assert.throws(() => parseAgentRequest({ ...input, catalog, currentSequence: sequence }, catalog));
   assert.deepEqual(parseAgentRequest({ ...input, catalog, currentSequence: sequence }, catalog, compositionPolicy).currentSequence, sequence);
+});
+
+test('stalled request bodies release concurrency slots when the deadline expires', async t => {
+  const server = createAgentServer({ apiKey: 'fixture', model: 'test', requestTimeoutMs: 200,
+    fetch: async () => Response.json(validOutput) });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); t.after(() => server.close());
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/agent/respond`;
+  const closed: Promise<void>[] = [];
+  for (let index = 0; index < 2; index++) {
+    const received = once(server, 'request');
+    const request = httpRequest(url, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    request.on('error', () => {});
+    closed.push(new Promise(resolve => request.on('close', resolve)));
+    t.after(() => request.destroy()); request.write('{'); await received;
+  }
+  const post = () => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+  assert.equal((await post()).status, 429);
+  await Promise.all(closed);
+  assert.equal((await post()).status, 200);
 });

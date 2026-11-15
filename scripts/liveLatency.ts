@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { WebSocket } from 'ws';
 import { compileUpperBodySequence } from '../src/anatomy/upperBodySequence';
 import type { LiveServerMessage } from '../src/live/protocol';
+import { LiveCompletion } from './liveCompletion';
 
 const args = process.argv.slice(2);
 const option = (name: string) => args[args.indexOf(name) + 1];
@@ -27,6 +28,7 @@ async function main() {
       await new Promise<void>(resolve => {
         const address = new URL(endpoint.url); address.protocol = address.protocol === 'https:' ? 'wss:' : 'ws:'; address.pathname = '/live';
         const socket = new WebSocket(address); let sent = 0; let finished = false;
+        const completion = new LiveCompletion();
         const finish = (error?: string) => {
           if (finished) return; finished = true; clearTimeout(timeout);
           if (error) { result.error = error; process.exitCode = 1; }
@@ -54,7 +56,7 @@ async function main() {
               socket.send(JSON.stringify({ type: 'applied', commandId: event.commandId, ok: true }));
             }
             if (event.type === 'error') finish(event.message);
-            if (event.type === 'turn_complete' && (result.actionMs !== undefined || index === 3) && result.firstAudioMs !== undefined) {
+            if (completion.update(event) && (result.actionMs !== undefined || index === 3)) {
               result.completedMs = elapsed; finish();
             }
           } catch (error) { finish(error instanceof Error ? error.message : 'Invalid response.'); }

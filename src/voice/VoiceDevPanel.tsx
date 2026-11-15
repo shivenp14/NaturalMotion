@@ -14,6 +14,8 @@ export function VoiceDevPanel() {
   sessionRef.current = session;
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   const controller = useRef<TurnCoordinator | null>(null);
+  const stopping = useRef<Promise<void>>(Promise.resolve());
+  const shutdownPending = useRef(false);
   const epoch = useRef(0);
   const mounted = useRef(true);
   const [phase, setPhase] = useState<SessionPhase>('idle');
@@ -38,7 +40,7 @@ export function VoiceDevPanel() {
   }, []);
 
   async function start(mode: 'echo' | 'agent') {
-    if (controller.current || pending || !supported) return;
+    if (controller.current || shutdownPending.current || pending || !supported) return;
     const run = ++epoch.current;
     setPending(true);
     setMessage('Requesting microphone permission…');
@@ -67,6 +69,8 @@ export function VoiceDevPanel() {
           else if (action.type === 'pause_session') sessionRef.current.setPaused(true);
           else throw new Error('Indexed playback controls are not connected. Request a complete replacement sequence.');
         },
+        supportedPlaybackActions: ['pause_session', 'stop_session'],
+        onStopped: () => { if (controller.current === current) controller.current = null; },
         onTranscript: text => {
           if (mounted.current && run === epoch.current) setTurns(previous => [...previous, { role: 'user' as const, text }].slice(-40));
         },
@@ -100,13 +104,18 @@ export function VoiceDevPanel() {
     const run = ++epoch.current;
     const current = controller.current;
     controller.current = null;
+    if (current) {
+      shutdownPending.current = true;
+      stopping.current = current.stop();
+    }
     if (mounted.current) setPending(true);
     try {
-      if (current) await current.stop();
+      await stopping.current;
       if (mounted.current && run === epoch.current) setMessage('Voice test stopped.');
     } catch (error) {
       if (mounted.current && run === epoch.current) setMessage(String(error));
     } finally {
+      shutdownPending.current = false;
       if (mounted.current && run === epoch.current) { setPhase('idle'); setPending(false); }
     }
   }

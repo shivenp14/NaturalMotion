@@ -76,7 +76,7 @@ export async function generateAgentReturn(
     method: 'POST', signal,
     headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: options.model, store: false, max_output_tokens: options.plannerOnly ? 4000 : 2000,
+      model: options.model, store: false, max_output_tokens: options.plannerOnly || options.reasoningEffort ? 4000 : 2000,
       ...(options.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}),
       instructions: [
         'You are NaturalMotion, a concise educational movement guide. Keep spoken replies short.',
@@ -100,6 +100,9 @@ export async function generateAgentReturn(
   });
   if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}.`);
   const data: unknown = await response.json();
+  if (isRecord(data) && data.status === 'incomplete' && isRecord(data.incomplete_details) && data.incomplete_details.reason === 'max_output_tokens') {
+    throw new Error('Provider output exceeded the configured token budget.');
+  }
   if (!isRecord(data) || data.status !== 'completed' || !Array.isArray(data.output)) {
     throw new Error('Provider did not complete the response.');
   }

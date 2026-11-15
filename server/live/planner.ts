@@ -52,7 +52,8 @@ export async function planMovement(options: AgentServiceOptions, utterance: stri
   if (!catalog.length || !options.compositionPolicy) throw new Error('Movement capabilities are not configured.');
   const response = await (options.fetch ?? fetch)('https://api.openai.com/v1/responses', {
     method: 'POST', signal, headers: { Authorization: `Bearer ${options.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: options.model, store: false, reasoning: { effort: 'low' }, max_output_tokens: 3000,
+    body: JSON.stringify({ model: options.model, store: false,
+      ...(options.reasoningEffort ? { reasoning: { effort: options.reasoningEffort } } : {}), max_output_tokens: 3000,
       instructions: [
         'Compose one educational upper-body demonstration using only supplied target channels and renderer constraints. The user utterance is authoritative; interpretation is context, not authorization.',
         'Return ordered timed groups of target componentId/toDeg values. Code derives each fromDeg from the previous group (initial pose for the first); omitted channels retain previous values. Never output fromDeg, sequence ids, explanations or session controls.',

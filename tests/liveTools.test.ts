@@ -81,3 +81,28 @@ test('an explicit text request opens a new turn after speech activity was observ
   assert.equal((await controller.handle(call('typed'))).ok, true);
   assert.deepEqual(utterances, ['Show a wall angel.', 'Make it slower.']);
 });
+
+test('stop and provider cancellation prevent a waiting request from consuming late transcription', async () => {
+  for (const method of ['stop', 'cancel'] as const) {
+    let planned = 0;
+    const controller = new ToolController({ plan: async () => { planned++; return { sequence, message: '' }; },
+      apply: async () => {}, onPlanning: () => {} });
+    const pending = controller.handle(call('waiting'));
+    if (method === 'stop') await controller.control('stop_movement'); else controller.cancel('waiting');
+    controller.noteInput('Show a wall angel.', true);
+    assert.equal((await pending).ok, false); assert.equal(planned, 0); controller.close();
+  }
+});
+
+test('movement planning waits for a trailing transcript qualifier', async () => {
+  let received = '';
+  const controller = new ToolController({ plan: async utterance => { received = utterance; return { sequence, message: '' }; },
+    apply: async () => {}, onPlanning: () => {} });
+  controller.noteInput('Show a wall angel', false);
+  const pending = controller.handle(call('partial'));
+  controller.finishTurn(); // Model output completion is not transcript completion.
+  await Promise.resolve(); assert.equal(received, '');
+  controller.noteInput(', but keep the range small.'); controller.noteInput('', true);
+  assert.equal((await pending).ok, true);
+  assert.equal(received, 'Show a wall angel, but keep the range small.'); controller.close();
+});

@@ -19,6 +19,7 @@ test('live provider tool travels through the real planner validator and requires
   const media: unknown[] = [];
   const context: { turns?: { parts?: { text?: string }[] }[]; turnComplete?: boolean }[] = [];
   const options = { ...anatomyAgentCapabilities, apiKey: 'mock-openai', geminiApiKey: 'mock-gemini', model: 'mock-planner', conversationModel: 'mock-live',
+    reasoningEffort: 'low' as const,
     fetch: async (_url: unknown, init?: RequestInit) => { plans++;
       const request = JSON.parse(init!.body as string);
       assert.equal(request.reasoning.effort, 'low');

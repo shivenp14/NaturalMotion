@@ -46,3 +46,15 @@ test('client stops instead of buffering unlimited microphone audio on a slow con
   socket.bufferedAmount = 256001; client.send({ type: 'audio', data: 'AAAA' });
   assert.equal(socket.readyState, 3); assert.match(reason, /Network/);
 });
+
+test('client flushes only the newest playback context after provider initialization', async () => {
+  const socket = new FakeSocket();
+  const client = new LiveClient({ baseUrl: 'http://localhost:3001', socketFactory: () => socket,
+    context: { type: 'context', sequence: null, playback: null }, apply: () => {}, onMessage: () => {}, onClose: () => {} });
+  const starting = client.start(); socket.open();
+  client.send({ type: 'context', sequence: null, playback: null, practiceStartedAt: 1 });
+  client.send({ type: 'context', sequence: null, playback: null, practiceStartedAt: 2 });
+  assert.equal(socket.messages.length, 1);
+  socket.receive({ type: 'ready', conversationModel: 'fixture', plannerModel: 'fixture' }); await starting;
+  assert.equal(socket.messages.length, 2); assert.equal(socket.messages[1].practiceStartedAt, 2); client.stop();
+});

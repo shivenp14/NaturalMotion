@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { generateAgentReturn, parseAgentRequest, RequestError, type AgentServiceOptions } from './agent';
 
 /** Local development service. Default bind is loopback; do not expose it publicly without authentication. */
-export function createAgentServer(options: AgentServiceOptions & { geminiApiKey?: string; conversationModel?: string }) {
+export function createAgentServer(options: AgentServiceOptions & { geminiApiKey?: string; conversationModel?: string; requestTimeoutMs?: number }) {
   let active = 0;
   return createServer(async (req, res) => {
     const send = (status: number, body: unknown) => {
@@ -23,7 +23,9 @@ export function createAgentServer(options: AgentServiceOptions & { geminiApiKey?
     if (active >= 2) { send(429, { error: 'Agent busy. Try again shortly.' }); return; }
     active++;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25_000);
+    let bodyReceived = false;
+    const timer = setTimeout(() => controller.abort(), options.requestTimeoutMs ?? 25_000);
+    controller.signal.addEventListener('abort', () => { if (!bodyReceived) req.destroy(); }, { once: true });
     const disconnect = () => { if (!res.writableEnded) controller.abort(); };
     res.on('close', disconnect);
     try {
@@ -34,6 +36,7 @@ export function createAgentServer(options: AgentServiceOptions & { geminiApiKey?
         if (length > 65_536) { send(413, { error: 'Request is too large.' }); return; }
         chunks.push(Buffer.from(chunk));
       }
+      bodyReceived = true;
       let body: unknown;
       try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
       catch { throw new RequestError('Invalid JSON.'); }

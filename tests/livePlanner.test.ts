@@ -11,6 +11,7 @@ const group = (elevation: number, flexion: number) => ({ durationSeconds: 3, hol
   ]) });
 const valid = { steps: [group(145, 20), group(90, 90)], message: '' };
 const run = (payload: unknown) => planMovement({ ...anatomyAgentCapabilities, apiKey: 'fixture', model: 'fixture',
+  reasoningEffort: 'low',
   fetch: async (_url, init) => {
     const request = JSON.parse(init!.body as string);
     assert.equal(request.reasoning.effort, 'low'); assert.equal(request.store, false);

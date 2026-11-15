@@ -23,6 +23,7 @@ export function validateAgentReturn(input: unknown, context: AgentValidationCont
   let sequence = context.currentSequence;
   const actions: AgentAction[] = [];
   for (const action of input.actions) {
+    if (actions.at(-1)?.type === 'pause_session' || actions.at(-1)?.type === 'stop_session') return fail('Session controls must end the action batch.');
     if (!isRecord(action)) return fail('Invalid action.');
     switch (action.type) {
       case 'play_sequence': {

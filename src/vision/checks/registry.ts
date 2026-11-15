@@ -12,7 +12,7 @@ export const coachingCatalog: readonly ComponentDefinition[] = upperBodyPreviewC
     requiredLandmarks: REQUIRED_GOALPOST_JOINTS, supportedCheckIds: [GOALPOST_ARMS_CHECK_ID] } : component);
 
 /** Reuse the verified goalpost check only for stationary bilateral goalpost holds. */
-export function deriveFormPlan(sequence: MovementSequence): ReadonlyMap<number, string> {
+export function deriveFormPlan(sequence: MovementSequence, minimumHoldSeconds = 0): ReadonlyMap<number, string> {
   const program = compileUpperBodySequence(sequence);
   const plan = new Map<number, string>();
   program.segments.forEach((segment, index) => {
@@ -20,7 +20,7 @@ export function deriveFormPlan(sequence: MovementSequence): ReadonlyMap<number, 
       Math.abs(arm.elevationDeg - 90) < 0.0001 && Math.abs(arm.elbowFlexionDeg - 90) < 0.0001 &&
       Math.abs(arm.externalRotationDeg - 90) < 0.0001);
     const hasShoulderCommand = getStepCommands(sequence.steps[index]).some(command => command.componentId.endsWith('shoulder_elevation'));
-    if (goalpost && hasShoulderCommand) plan.set(index, GOALPOST_ARMS_CHECK_ID);
+    if (goalpost && hasShoulderCommand && segment.holdSeconds >= minimumHoldSeconds) plan.set(index, GOALPOST_ARMS_CHECK_ID);
   });
   return plan;
 }
@@ -37,6 +37,7 @@ export function formMessage(status: FormReport['status']): string {
 export class SequenceFormEvaluator {
   private sequence: MovementSequence | null = null;
   private plan: ReadonlyMap<number, string> = new Map();
+  private demonstrationPlan: ReadonlyMap<number, string> = new Map();
   private context = '';
   private stabilizer = new StatusStabilizer();
   private lastObservationAt = 0;
@@ -44,14 +45,14 @@ export class SequenceFormEvaluator {
   evaluate(sequence: MovementSequence | null, playback: PlaybackState | null,
     observation: PoseObservation | null, now: number, practiceStartedAt: number | null = null): FormReport | null {
     if (!sequence || !playback || playback.sequenceId !== sequence.id) { this.reset(); return null; }
-    if (sequence !== this.sequence) { this.sequence = sequence; this.plan = deriveFormPlan(sequence); }
+    if (sequence !== this.sequence) { this.sequence = sequence; this.plan = deriveFormPlan(sequence); this.demonstrationPlan = deriveFormPlan(sequence, 0.6); }
     // Practice is an explicit following state after playback, not a renderer phase report.
     const practice = practiceStartedAt !== null && playback.status === 'completed' &&
       playback.stepIndex === sequence.steps.length - 1 && this.plan.has(playback.stepIndex);
     if (practice) playback = { ...playback, phase: 'holding', status: 'playing', updatedAt: practiceStartedAt! };
     const context = JSON.stringify([sequence.id, playback.stepIndex, playback.phase, playback.status, playback.updatedAt]);
     if (context !== this.context) { this.context = context; this.stabilizer.reset(); this.lastObservationAt = 0; this.stableStatus = 'not_observable'; }
-    const checkId = this.plan.get(playback.stepIndex) ?? null;
+    const checkId = (practice ? this.plan : this.demonstrationPlan).get(playback.stepIndex) ?? null;
     let status: FormReport['status'] = 'unavailable';
     if (checkId && playback.phase === 'holding' && playback.status === 'playing') {
       status = 'not_observable';

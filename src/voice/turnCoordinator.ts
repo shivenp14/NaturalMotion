@@ -18,6 +18,9 @@ export type TurnCoordinatorOptions = {
   onSequence(sequence: MovementSequence): void;
   /** Required when the agent returns movement/session controls. Must synchronously dispatch. */
   onPlaybackAction?(action: PlaybackAction): void;
+  supportedPlaybackActions?: readonly PlaybackAction['type'][];
+  /** Native shutdown has completed; an owning UI may release this coordinator. */
+  onStopped?(): void;
   onError?(error: unknown): void;
   silenceRetryDelayMs?: number;
   compositionPolicy?: CompositionPolicy;
@@ -31,6 +34,7 @@ export class TurnCoordinator {
   private silenceCount = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private stopping: Promise<void> = Promise.resolve();
+  private shutdown: Promise<void> | null = null;
 
   constructor(private readonly options: TurnCoordinatorOptions) {}
 
@@ -51,12 +55,13 @@ export class TurnCoordinator {
     this.clearRetry();
     this.currentRequest?.abort();
     this.currentRequest = null;
-    this.options.onPhase('idle');
-    const stopping = this.options.voice.stop();
+    if (this.shutdown) { await this.shutdown; return; }
+    const stopping = this.options.voice.stop().finally(() => { this.options.onPhase('idle'); this.options.onStopped?.(); });
     this.stopping = stopping;
+    this.shutdown = stopping;
     // Keep a rejection handler even if a caller chooses not to await stop.
     void stopping.catch(() => {});
-    await stopping;
+    try { await stopping; } finally { if (this.shutdown === stopping) this.shutdown = null; }
   }
 
   private isCurrent(generation: number) { return this.active && generation === this.generation; }
@@ -113,8 +118,10 @@ export class TurnCoordinator {
       if (!checked.ok) throw new Error(checked.error);
       if (checked.value.trigger.type !== 'user_utterance') throw new Error('Expected a user utterance response.');
       // Reject unsupported dispatch before any part of the batch executes.
-      if (!this.options.onPlaybackAction && checked.value.actions.some(action =>
-        ['modify_playback', 'replay_demonstration', 'pause_session', 'stop_session'].includes(action.type))) {
+      if (checked.value.actions.some(action =>
+        ['modify_playback', 'replay_demonstration', 'pause_session', 'stop_session'].includes(action.type) &&
+        (!this.options.onPlaybackAction || (this.options.supportedPlaybackActions &&
+          !this.options.supportedPlaybackActions.includes(action.type as PlaybackAction['type']))))) {
         throw new Error('Playback controls are not connected.');
       }
       for (const action of checked.value.actions) {

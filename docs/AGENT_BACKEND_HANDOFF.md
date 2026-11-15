@@ -6,6 +6,8 @@ The current live path uses Gemini conversation plus a separate OpenAI movement p
 
 Use Node 24. Copy `server/.env.example` to `server/.env` and configure `OPENAI_API_KEY` there. For the live route also configure `GEMINI_API_KEY`; both keys are sufficient without other settings. `OPENAI_MODEL` defaults to `gpt-6-luna`; select an available Responses/Structured Outputs model for your account. This file is ignored by Git. Never use an EXPO_PUBLIC variable for provider secrets.
 
+GPT-6 model defaults use low reasoning. Other model overrides omit the reasoning field unless `OPENAI_REASONING_EFFORT` explicitly selects `none`, `low` or `medium`; `omit` suppresses it for any model. No additional setting is required for the default setup.
+
 Start the service:
 
 ```sh

@@ -26,31 +26,41 @@ export class ToolController {
   private closed = false;
   private speechBoundaries = false;
   private inputWaiters = new Set<() => void>();
+  private waiting = new Map<string, { cancelled: boolean }>();
   constructor(private readonly options: Options) {}
   get currentSequence() { return this.sequence; }
   setSequence(sequence: MovementSequence | null) { this.sequence = sequence; }
   beginSpeech() {
     this.speechBoundaries = true;
     if (this.inputOpen && this.utterance && !this.usedPlan) return;
-    this.beginTurn();
+    this.beginTurn(!this.utterance && this.waiting.size > 0);
   }
-  endSpeech() { this.inputOpen = false; }
-  private beginTurn() {
-    this.cancel(); this.utterance = ''; this.usedPlan = false; this.requestsThisTurn = 0;
+  endSpeech() { this.inputOpen = false; this.wakeInput(); }
+  private wakeInput() { for (const resolve of this.inputWaiters) resolve(); this.inputWaiters.clear(); }
+  private beginTurn(preserveWaiting = false) {
+    if (!preserveWaiting) this.cancel();
+    this.utterance = ''; this.usedPlan = false; this.requestsThisTurn = 0;
     this.awaitingInput = false; this.inputOpen = true;
   }
   noteTextInput(text: string) { this.beginTurn(); this.noteInput(text, true); }
   noteInput(text: string, finished = false) {
-    if (!text.trim()) return;
-    if (!this.speechBoundaries && this.awaitingInput && !this.inputOpen) this.beginTurn();
+    if (!text.trim()) { if (finished) { this.inputOpen = false; this.wakeInput(); } return; }
+    if (!this.speechBoundaries && this.awaitingInput && !this.inputOpen) this.beginTurn(!this.utterance && this.waiting.size > 0);
     this.utterance = `${this.utterance}${text}`.slice(-4000);
-    for (const resolve of this.inputWaiters) resolve(); this.inputWaiters.clear();
     if (finished) this.inputOpen = false;
+    this.wakeInput();
   }
-  finishTurn() { if (!this.speechBoundaries) { this.inputOpen = false; this.awaitingInput = true; } }
+  finishTurn() { if (!this.speechBoundaries) { this.awaitingInput = true; this.wakeInput(); } }
   interrupt() { this.cancel(); this.inputOpen = false; this.awaitingInput = true; }
   cancel(id?: string) {
-    if (id && this.active?.id !== id) return;
+    if (id) {
+      const waiting = this.waiting.get(id);
+      if (waiting) { waiting.cancelled = true; this.wakeInput(); }
+      if (this.active?.id !== id) return;
+    } else {
+      for (const waiting of this.waiting.values()) waiting.cancelled = true;
+      this.wakeInput();
+    }
     this.generation++;
     this.active?.abort.abort(); this.active = null;
     this.options.onPlanning(false);
@@ -86,10 +96,18 @@ export class ToolController {
     if (++this.requestsThisTurn > 3) return { ok: false, message: 'Tool request limit reached. Wait for the user; do not retry.' };
     // The provider documents transcription and function calls as independently ordered streams.
     // Briefly wait for actual user text instead of inventing an utterance from camera context.
-    if (!this.utterance.trim()) await new Promise<void>(resolve => {
-      const done = () => { clearTimeout(timer); this.inputWaiters.delete(done); resolve(); };
-      const timer = setTimeout(done, 1000); this.inputWaiters.add(done);
-    });
+    const waiting = { cancelled: false }; this.waiting.set(call.id!, waiting);
+    const deadline = Date.now() + 1000;
+    try {
+      while (!this.closed && !waiting.cancelled && (this.inputOpen || !this.utterance.trim()) && Date.now() < deadline) {
+        await new Promise<void>(resolve => {
+          const done = () => { clearTimeout(timer); this.inputWaiters.delete(done); resolve(); };
+          const timer = setTimeout(done, Math.max(1, deadline - Date.now())); this.inputWaiters.add(done);
+        });
+      }
+      if (waiting.cancelled) return { ok: false, message: 'Request was cancelled before transcription completed.' };
+      if (this.inputOpen) return { ok: false, message: 'A complete user request was not received. Ask the user to repeat it.' };
+    } finally { this.waiting.delete(call.id!); }
     if (this.closed) return { ok: false, message: 'Session is closed.' };
     if (!this.utterance.trim() || this.usedPlan || this.active) {
       return { ok: false, message: 'At most one movement plan per user turn. Wait for a new user request; do not retry.' };

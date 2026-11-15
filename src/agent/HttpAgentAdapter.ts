@@ -37,7 +37,8 @@ export class HttpAgentAdapter implements AgentAdapter {
     try {
       const response = await this.fetcher(this.endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request), signal: controller.signal,
+        body: JSON.stringify({ utterance: request.utterance, catalog: request.catalog,
+          currentSequence: request.currentSequence, ...(request.cues ? { cues: request.cues } : {}) }), signal: controller.signal,
       });
       if (!response.ok) throw new Error(`Agent backend returned HTTP ${response.status}.`);
       const checked = validateAgentReturn(await response.json(), {

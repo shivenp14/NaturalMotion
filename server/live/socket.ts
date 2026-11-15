@@ -86,9 +86,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         if (content?.interrupted) { tools.interrupt(); send({ type: 'interrupted' }); }
         if (message.voiceActivity?.voiceActivityType === 'ACTIVITY_START') tools.beginSpeech();
         if (message.voiceActivity?.voiceActivityType === 'ACTIVITY_END') tools.endSpeech();
-        if (content?.inputTranscription?.text) {
-          tools.noteInput(content.inputTranscription.text, content.inputTranscription.finished);
-          send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
+        if (content?.inputTranscription) {
+          tools.noteInput(content.inputTranscription.text ?? '', content.inputTranscription.finished);
+          if (content.inputTranscription.text) send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
         }
         if (content?.outputTranscription?.text) send({ type: 'transcript', role: 'assistant', text: content.outputTranscription.text });
         for (const part of content?.modelTurn?.parts ?? []) {
@@ -173,8 +173,8 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             if (!hasOnlyKeys(input, ['type', 'report']) || !isRecord(report) || !sequence || !playback || report.sequenceId !== sequence.id || report.stepIndex !== playback.stepIndex ||
               typeof report.observedAt !== 'number' || !Number.isFinite(report.observedAt) || now - report.observedAt > 2000 || report.observedAt > now + 1000 ||
               !['aligned', 'needs_adjustment', 'not_observable', 'unavailable'].includes(String(report.status))) break;
-            const expected = deriveFormPlan(sequence).get(playback.stepIndex);
             const practice = practiceStartedAt !== null && playback.status === 'completed' && playback.stepIndex === sequence.steps.length - 1;
+            const expected = deriveFormPlan(sequence, practice ? 0 : 0.6).get(playback.stepIndex);
             const status = expected && report.checkId === expected &&
               (practice || (playback.phase === 'holding' && playback.status === 'playing'))
               ? report.status as 'aligned' | 'needs_adjustment' | 'not_observable' | 'unavailable' : 'unavailable';

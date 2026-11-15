@@ -70,6 +70,13 @@ test('provider schema derives numeric parameter names and includes groups only w
   assert.equal(JSON.stringify(createResponseSchema([], false)).includes('play_sequence'), false);
 });
 
+test('pause and stop end a batch so accepted trailing actions are never silently discarded', () => {
+  for (const type of ['pause_session', 'stop_session']) {
+    assert.equal(validateAgentReturn(response([{ type, reason: 'user_request' }, { type: 'speak_text', text: 'Too late.' }]), context).ok, false);
+    assert.equal(validateAgentReturn(response([{ type: 'speak_text', text: 'Stopping.' }, { type, reason: 'user_request' }]), context).ok, true);
+  }
+});
+
 const playback: PlaybackState = { sequenceId: sequence.id, stepIndex: 0, phase: 'holding', status: 'playing', updatedAt: 1000 };
 const event: FormEvent = { sequenceId: sequence.id, stepIndex: 0, checkId: 'b-check', status: 'needs_adjustment', observedAt: 1100, measurements: {} };
 const decide = (e: FormEvent, state = emptyFeedbackState(), now = e.observedAt) =>

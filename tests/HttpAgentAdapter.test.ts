@@ -26,6 +26,14 @@ test('rejects backend failures and unregistered movements', async () => {
   await assert.rejects(invalid.respond(request), /Invalid agent response/);
 });
 
+test('HTTP diagnostics omit camera observations from the supported transcript wire format', async () => {
+  const adapter = new HttpAgentAdapter({ baseUrl: 'http://localhost:3001', fetch: async (_url, init) => {
+    assert.deepEqual(JSON.parse(init!.body as string), request); return Response.json(reply);
+  } });
+  await adapter.respond({ ...request, observation: { sequenceId: 'fixture', stepIndex: 0,
+    checkId: 'fixture', observedAt: 1, status: 'aligned', measurements: {} } });
+});
+
 test('propagates cancellation and times out stalled requests', async () => {
   const stalled: typeof fetch = async (_url, init) => new Promise((_resolve, reject) => {
     if (init?.signal?.aborted) reject(new Error('aborted'));

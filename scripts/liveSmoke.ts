@@ -1,6 +1,7 @@
 import { WebSocket } from 'ws';
 import { compileUpperBodySequence } from '../src/anatomy/upperBodySequence';
 import type { LiveServerMessage } from '../src/live/protocol';
+import { LiveCompletion } from './liveCompletion';
 
 const address = new URL(process.env.AGENT_TEST_BASE_URL ?? 'http://127.0.0.1:3001');
 address.protocol = address.protocol === 'https:' ? 'wss:' : 'ws:'; address.pathname = '/live';
@@ -8,6 +9,7 @@ const socket = new WebSocket(address);
 let accepted = false;
 let audioChunks = 0;
 let finished = false;
+const completion = new LiveCompletion();
 const args = process.argv.slice(2);
 const expectNoMovement = args.includes('--expect-no-movement');
 const timeout = setTimeout(() => finish('Live smoke test timed out.'), 60_000);
@@ -40,6 +42,6 @@ socket.on('message', data => {
       accepted = true;
       socket.send(JSON.stringify({ type: 'applied', commandId: event.commandId, ok: true }));
     }
-    if ((accepted || expectNoMovement) && audioChunks > 0 && event.type === 'turn_complete') finish();
+    if (completion.update(event) && (accepted || expectNoMovement)) finish();
   } catch { finish('Live response or generated movement failed validation.'); }
 });
