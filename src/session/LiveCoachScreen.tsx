@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
+import { createWallAngelReference } from '../anatomy/upperBodySequence';
+import { wallAngelDefaults } from '../anatomy/wallAngel';
 import { LiveClient } from '../live/LiveClient';
-import type { FormReport, LiveAction } from '../live/protocol';
+import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
 import type { PoseObservation } from '../shared/contracts';
 import type { LiveAudio } from '../voice/LiveAudio.types';
 import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
@@ -20,6 +22,8 @@ import { CallStage } from './CallStage';
 
 export function LiveCoachScreen() {
   const session = useSession();
+  const params = useLocalSearchParams<{ diagnostics?: string }>();
+  const diagnostics = __DEV__ && params.diagnostics === '1';
   const [mainView, setMainView] = useState<'model' | 'camera'>('camera');
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(false);
@@ -40,18 +44,19 @@ export function LiveCoachScreen() {
   const poseClock = useRef<number | null>(null);
   const evaluator = useRef(new SequenceFormEvaluator());
   const counters = useRef({ microphone: 0, images: 0, peak: 0 });
-  const [, setStats] = useState({ microphone: 0, images: 0, peak: 0 });
+  const [stats, setStats] = useState({ microphone: 0, images: 0, peak: 0 });
   const [mode, setMode] = useState<'live' | 'local' | null>(null);
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState('Connecting your conversation…');
+  const [message, setMessage] = useState(diagnostics ? 'Diagnostics ready. Choose a local or live test.' : 'Connecting your conversation…');
   const [planning, setPlanning] = useState(false);
   const [cameraWarning, setCameraWarning] = useState('');
-  const [, setReport] = useState<FormReport | null>(null);
+  const [report, setReport] = useState<FormReport | null>(null);
   const [practiceStartedAt, setPracticeStartedAt] = useState<number | null>(null);
   const practice = useRef<number | null>(null);
   useEffect(() => { practice.current = practiceStartedAt; }, [practiceStartedAt]);
   const lastReport = useRef('');
   const lastFormSentAt = useRef(0);
+  const [text, setText] = useState('');
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   const stop = useCallback(async (reason = 'Session stopped. Camera and microphone released.') => {
@@ -165,7 +170,7 @@ export function LiveCoachScreen() {
       }, error => { if (run === epoch.current) void stop(error); }, warning => {
         if (run === epoch.current && mounted.current) setCameraWarning(warning);
       });
-      if (run === epoch.current && mounted.current && nextMode === 'live') client.current?.send({ type: 'text', text: 'Please greet me briefly and ask what stretch I would like to do or where I feel sore. Do not start a demonstration until I respond.' });
+      if (run === epoch.current && mounted.current && nextMode === 'live' && !diagnostics) client.current?.send({ type: 'text', text: 'Please greet me briefly and ask what stretch I would like to do or where I feel sore. Do not start a demonstration until I respond.' });
       if (run === epoch.current && mounted.current) setMessage(nextMode === 'local'
         ? 'Local devices test. Audio and images stay on this phone. The speaker button plays a test tone.'
         : streamMicrophone ? 'Live camera and microphone connected. Ask for a demonstration.'
@@ -176,10 +181,16 @@ export function LiveCoachScreen() {
   }
 
   useEffect(() => {
-    if (!autoStarted.current) { autoStarted.current = true; void start('live'); }
+    if (!diagnostics && !autoStarted.current) { autoStarted.current = true; void start('live'); }
   // Start once after the user opens this screen; retry is available after an error.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [diagnostics]);
+
+  function control(name: LiveControl) {
+    if (name === 'stop_movement') { latest.current.reset(); practice.current = null; setPracticeStartedAt(null); setReport(null); }
+    else { latest.current.setPaused(name === 'pause_movement'); practice.current = null; setPracticeStartedAt(null); }
+    client.current?.send({ type: 'control', name });
+  }
 
   function onPose(frame: PoseFrameLike) {
     if (!isFreshFrame(poseClock.current, frame.timestamp)) return;
@@ -188,7 +199,7 @@ export function LiveCoachScreen() {
     const current = latest.current;
     if (current.sequence && current.playback?.status === 'completed' && !practiceDetected && motion.current.update(observation.current)) {
       setPracticeDetected(true); setMainView('camera');
-      if (deriveFormPlan(current.sequence).has(current.sequence.steps.length - 1)) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); }
+      if (practice.current === null && deriveFormPlan(current.sequence).has(current.sequence.steps.length - 1)) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); }
     }
     evaluate();
   }
@@ -204,6 +215,61 @@ export function LiveCoachScreen() {
   const playbackMarker = !session.sequence ? 'idle' : !session.playback ? 'preparing' :
     session.playback.status === 'playing' ? 'active' : session.playback.status;
 
+  if (diagnostics) return (
+    <SafeAreaView style={styles.callScreen} testID="live-screen">
+      <View style={styles.top} testID={connectionMarker}>
+        <Pressable accessibilityRole="button" onPress={() => void stop().then(() => router.back())} style={styles.smallButton}><Text style={styles.buttonText}>Back</Text></Pressable>
+        <Text style={styles.title} testID={`live-playback-${playbackMarker}`}>Session diagnostics</Text>
+        <Pressable testID="live-end" accessibilityRole="button" onPress={() => void stop()} style={styles.smallButton}><Text style={styles.buttonText}>End coach</Text></Pressable>
+      </View>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <Text style={styles.note}>Live mode sends microphone audio and sampled camera images to the conversation provider. Pose checks run locally. Face the phone with your shoulders, elbows and ears visible.</Text>
+        <Text style={styles.status} accessibilityLiveRegion="polite">{planning ? 'Preparing your movement…' : message}</Text>
+        {!mode && <View style={styles.row}>
+          <Pressable testID="live-start" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>{pending ? 'Preparing…' : 'Start live coach'}</Text></Pressable>
+          {__DEV__ && <Pressable testID="live-local-start" accessibilityRole="button" disabled={pending} onPress={() => void start('local')} style={styles.button}><Text style={styles.buttonText}>Test devices locally</Text></Pressable>}
+          {__DEV__ && <Pressable testID="live-text-test-start" accessibilityRole="button" disabled={pending} onPress={() => void start('live', false)} style={styles.button}><Text style={styles.buttonText}>Test live requests with text</Text></Pressable>}
+        </View>}
+        {mode && <>
+          <View style={styles.camera} testID="live-camera">
+            <CameraPoseView onFrame={onPose} onCameraImage={image => {
+              counters.current.images++;
+              if (Date.now() - image.observedAt < 2000) client.current?.send({ type: 'image', data: image.data, observedAt: image.observedAt });
+            }} onError={(error, fatal) => {
+              if (!fatal) { setCameraWarning(error); return; }
+              void stop(error);
+            }} />
+          </View>
+          {!!cameraWarning && <Text style={styles.note}>{cameraWarning}</Text>}
+          <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
+        </>}
+        <AnatomyViewport sequence={session.sequence} paused={session.paused}
+          onPlaybackChange={session.recordPlayback} showLab={false} compact />
+        <Text testID={`live-form-${report?.mode ?? 'none'}`} style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
+        {session.sequence && <>
+          <Text style={styles.note}>{session.playback ? `Step ${session.playback.stepIndex + 1} · ${session.playback.phase} · ${session.playback.status}` : 'Preparing demonstration…'}</Text>
+          <View style={styles.row}>
+            <Pressable testID={session.paused ? 'live-resume' : 'live-pause'} accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
+            <Pressable testID="live-clear" accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Clear movement</Text></Pressable>
+            {!!canPractice && <Pressable accessibilityRole="button" onPress={() => { if (practice.current === null) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); } }} style={styles.button}><Text style={styles.buttonText}>Check final goalpost position</Text></Pressable>}
+          </View>
+        </>}
+        {mode === 'live' && <View style={styles.panel}>
+          <TextInput testID="live-request" accessibilityLabel="Live text request" style={styles.input} multiline value={text} onChangeText={setText} />
+          <Pressable testID="live-send" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => { if (!pending && text.trim()) client.current?.send({ type: 'text', text }); }} style={styles.button}><Text style={styles.buttonText}>Send text to live coach</Text></Pressable>
+        </View>}
+        {mode === 'local' && <View style={styles.row}>
+          <Pressable accessibilityRole="button" onPress={() => audio.current?.testSpeaker()} style={styles.button}><Text style={styles.buttonText}>Test speaker tone</Text></Pressable>
+          <Pressable testID="live-local-reference" accessibilityRole="button" onPress={() => {
+            const reference = createWallAngelReference(wallAngelDefaults, `local-reference-${Date.now()}`);
+            const last = reference.steps.at(-1)!; if ('parallel' in last) last.holdSeconds = 2;
+            const checked = session.acceptSequence(reference); if (!checked.ok) setMessage(checked.error);
+          }} style={styles.button}><Text style={styles.buttonText}>Play authored reference</Text></Pressable>
+        </View>}
+      </ScrollView>
+    </SafeAreaView>
+  );
+
   if (mode) return <SafeAreaView style={styles.callScreen} testID="live-screen">
     <CallStage mainView={mainView} connectionMarker={connectionMarker} camera={
         <CameraPoseView onFrame={onPose} onCameraImage={image => {
@@ -213,7 +279,7 @@ export function LiveCoachScreen() {
       } model={
         <AnatomyViewport sequence={session.sequence} paused={session.paused} onPlaybackChange={session.recordPlayback} showLab={false} stage />
       } onSwap={() => {
-        if (mainView === 'model') { setMainView('camera'); setPracticeDetected(true); if (canPractice) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); } }
+        if (mainView === 'model') { setMainView('camera'); setPracticeDetected(true); if (canPractice && practice.current === null) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); } }
         else setMainView('model');
       }}>
       {planning && <View pointerEvents="none" style={styles.callStatus}><Text style={styles.statusText}>Preparing your demonstration…</Text></View>}
@@ -243,6 +309,7 @@ const styles = StyleSheet.create({
   retryText: { color: '#fff', fontWeight: '600' },
   cancelButton: { padding: 12 },
   cancelText: { color: '#596778', fontWeight: '600' },
+  camera: { height: 220, overflow: 'hidden', borderRadius: 16, backgroundColor: theme.surface },
   callScreen: { flex: 1, backgroundColor: '#ffffff' },
   callStage: { flex: 1, position: 'relative', overflow: 'hidden', backgroundColor: '#ffffff' },
   callPreview: { left: 20, bottom: 24, width: 105, height: 150, borderRadius: 18, borderWidth: 2, borderColor: '#fff', zIndex: 2 },

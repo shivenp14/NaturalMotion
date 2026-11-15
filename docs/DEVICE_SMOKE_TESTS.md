@@ -28,6 +28,8 @@ AGENT_DEVICE_METRO_URL=http://127.0.0.1:8083 \
 npm run check:device
 ```
 
+The replays use `naturalmotion://live?diagnostics=1`, a development-only diagnostics view containing the local reference, typed request and playback controls. Normal entry at `/live` still opens the call layout directly. End in diagnostics leaves the stopped screen visible so cleanup can be verified; End in the normal call returns home.
+
 Ordinary CI keeps running `npm run check` and `npm run export:android`; it does not silently launch a device or consume provider credits. The full device suite uses the explicitly labeled development **Test live requests with text** mode and sends one text request to the actual configured Gemini/OpenAI path. Native microphone capture remains local in this mode, preventing ambient speech from replacing the scripted text request; camera images and provider responses remain real. Normal **Start live coach** still streams microphone input. This typed test does not establish hands-free speech quality. Local mode uses the clearly labeled authored reference and sends no media to providers.
 
 ## What the cases prove
