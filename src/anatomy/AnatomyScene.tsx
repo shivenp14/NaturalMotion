@@ -11,6 +11,7 @@ import { anatomyViewAngles, type AnatomyFocus, type AnatomyView } from './region
 import { createWallAngelRig, sampleWallAngelCycle, type WallAngelPreview } from './wallAngel';
 import type { PlaybackState } from '../shared/contracts';
 import { createPlaybackReporter, sampleUpperBodyProgram, type UpperBodyProgram } from './upperBodySequence';
+import type { UpperBodyPose } from './upperBodyPose';
 
 export type AnatomySceneProps = {
   focus: AnatomyFocus;
@@ -19,11 +20,12 @@ export type AnatomySceneProps = {
   preview?: WallAngelPreview;
   onPreviewComplete?: () => void;
   program?: UpperBodyProgram | null;
+  pose?: UpperBodyPose | null;
   playbackPaused?: boolean;
   onPlaybackChange?: (state: PlaybackState) => void;
 };
 
-export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange }: AnatomySceneProps) {
+export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, pose, playbackPaused = false, onPlaybackChange }: AnatomySceneProps) {
   const gltf = useLoader(GLTFLoader, bodyAssetUri);
   const model = useMemo(() => prepareAnatomyModel(gltf.scene), [gltf.scene]);
   const rig = useMemo(() => createWallAngelRig(model.scene), [model]);
@@ -39,7 +41,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
   const callback = useRef(onPlaybackChange);
   useLayoutEffect(() => { callback.current = onPlaybackChange; }, [onPlaybackChange]);
   const report = useRef<ReturnType<typeof createPlaybackReporter> | null>(null);
-  const movementVisible = !!program || (!!preview && preview.mode !== 'rest');
+  const movementVisible = !!program || !!pose || (!!preview && preview.mode !== 'rest');
   useLayoutEffect(() => {
     programTime.current = 0;
     programDone.current = false;
@@ -64,6 +66,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
   }, [camera, movementVisible, invalidate]);
   useLayoutEffect(() => {
     if (program) { running.current = false; return; }
+    if (pose) { running.current = false; rig.applyPose(pose); invalidate(); return; }
     const mode = preview?.mode ?? 'rest';
     running.current = mode === 'playing';
     if (mode === 'rest') {
@@ -79,7 +82,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
     }
     previousMode.current = mode;
     invalidate();
-  }, [rig, preview, program, invalidate]);
+  }, [rig, preview, program, pose, invalidate]);
   useFrame((_, delta) => {
     if (program && report.current) {
       if (playbackPaused || programDone.current) return;

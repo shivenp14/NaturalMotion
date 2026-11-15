@@ -1,4 +1,4 @@
-import { MathUtils, Matrix4, Quaternion, Vector3, type Bone, type Object3D } from 'three';
+import { Euler, MathUtils, Matrix4, Quaternion, Vector3, type Bone, type Object3D } from 'three';
 import { initialUpperBodyPose, upperBodyPoseError, type UpperBodyPose } from './upperBodyPose';
 
 /** Rendering limits for this authored preview, not prescribed human ROM. */
@@ -67,12 +67,24 @@ export function createWallAngelRig(scene: Object3D) {
     twist: requireBone(`forearm_twist${side}`),
     hand: requireBone(`hand${side}`),
   }));
-  const controlled = sides.flatMap(({ clavicle, scapula, upperarm, forearm, twist, hand }) => [clavicle, scapula, upperarm, forearm, twist, hand]);
+  const spine = ['spine_01', 'spine_02', 'spine_03'].map(requireBone);
+  const neck = requireBone('neck');
+  const head = requireBone('head');
+  const controlled = [...spine, neck, head, ...sides.flatMap(({ clavicle, scapula, upperarm, forearm, twist, hand }) => [clavicle, scapula, upperarm, forearm, twist, hand])];
   const restLocal = new Map(controlled.map((bone) => [bone, bone.quaternion.clone()]));
   scene.updateWorldMatrix(true, true);
   const inverseRoot = scene.getWorldQuaternion(new Quaternion()).invert();
   const restModel = new Map(controlled.map((bone) => [bone, bone.getWorldQuaternion(new Quaternion()).premultiply(inverseRoot)]));
   const rootRotation = new Quaternion();
+  const sceneRotation = new Quaternion();
+  const torsoRotation = new Quaternion();
+  const girdleRotation = new Quaternion();
+  const planeRotation = new Quaternion();
+  const rollRotation = new Quaternion();
+  const wristRotation = new Quaternion();
+  const angles = new Euler(0, 0, 0, 'YXZ');
+  const up = new Vector3(0, 1, 0);
+  const palmReference = new Vector3();
   const parentInverse = new Quaternion();
   const desired = new Quaternion();
   const forearmOrientation = new Quaternion();
@@ -107,51 +119,90 @@ export function createWallAngelRig(scene: Object3D) {
   function apply(progress: number, parameters: WallAngelParameters = wallAngelDefaults) {
     validateWallAngelParameters(parameters);
     if (!Number.isFinite(progress) || progress < 0 || progress > 1) throw new Error('Invalid wall-angel pose progress.');
-    const arm = { elevationDeg: 90 + (parameters.topAngleDeg - 90) * progress, elbowFlexionDeg: 90 - 70 * progress, externalRotationDeg: 90 };
-    applyPose({ left: { ...arm }, right: { ...arm } });
+    const arm = { ...initialUpperBodyPose().left, elevationDeg: 90 + (parameters.topAngleDeg - 90) * progress, elbowFlexionDeg: 90 - 70 * progress, externalRotationDeg: 90 };
+    applyPose({ ...initialUpperBodyPose(), left: { ...arm }, right: { ...arm } });
   }
 
   function applyPose(pose: UpperBodyPose) {
     const error = upperBodyPoseError(pose);
     if (error) throw new Error(error);
     reset();
-    scene.getWorldQuaternion(rootRotation);
+    scene.getWorldQuaternion(sceneRotation);
+    rootRotation.copy(sceneRotation);
+    // Cumulative model-space rotations distribute torso movement across the three spine
+    // segments. Pelvis and lower-body locals are never written.
+    for (let index = 0; index < spine.length; index++) {
+      const fraction = [0.2, 0.55, 1][index];
+      angles.set(MathUtils.degToRad(pose.torso.flexionDeg * fraction), MathUtils.degToRad(pose.torso.rotationDeg * fraction), -MathUtils.degToRad(pose.torso.sideBendDeg * fraction), 'YXZ');
+      torsoRotation.setFromEuler(angles);
+      desired.copy(restModel.get(spine[index])!).premultiply(torsoRotation);
+      setModelRotation(spine[index], desired);
+    }
+    rootRotation.copy(sceneRotation).multiply(torsoRotation);
+    for (const [bone, fraction] of [[neck, 0.6], [head, 1]] as const) {
+      angles.set(MathUtils.degToRad(pose.neck.flexionDeg * fraction), MathUtils.degToRad(pose.neck.rotationDeg * fraction), -MathUtils.degToRad(pose.neck.sideBendDeg * fraction), 'YXZ');
+      rotation.setFromEuler(angles);
+      desired.copy(restModel.get(bone)!).premultiply(rotation);
+      setModelRotation(bone, desired);
+    }
     for (const side of sides) {
       const arm = pose[side.key];
       const elevation = MathUtils.degToRad(arm.elevationDeg);
       const flexion = MathUtils.degToRad(arm.elbowFlexionDeg);
       const progress = MathUtils.clamp((arm.elevationDeg - 90) / 55, 0, 1);
-      // Scapula is a sibling of upperarm on this rig. Author its motion too,
-      // while leaving pelvis/spine/neck at their original local transforms.
-      rotation.setFromAxisAngle(front, side.sign * MathUtils.degToRad(3 + 8 * progress));
+      // One coordinator owns girdle and arm rotations. Independent shrug/reach offsets
+      // augment automatic clavicle/scapula motion rather than competing for bone writes.
+      angles.set(0, -side.sign * MathUtils.degToRad(arm.reachDeg), side.sign * MathUtils.degToRad(arm.shrugDeg), 'YXZ');
+      girdleRotation.setFromEuler(angles);
+      rootRotation.copy(sceneRotation).multiply(torsoRotation).multiply(girdleRotation);
+      const raised = Math.min(arm.elevationDeg / 90, 1);
+      rotation.setFromAxisAngle(front, side.sign * MathUtils.degToRad((3 + 8 * progress) * raised));
       desired.copy(restModel.get(side.clavicle)!).premultiply(rotation);
       setModelRotation(side.clavicle, desired);
-      rotation.setFromAxisAngle(front, side.sign * MathUtils.degToRad(20 + 20 * progress));
+      rotation.setFromAxisAngle(front, side.sign * MathUtils.degToRad((20 + 20 * progress) * raised));
       desired.copy(restModel.get(side.scapula)!).premultiply(rotation);
       setModelRotation(side.scapula, desired);
 
-      upper.set(side.sign * Math.sin(elevation), -Math.cos(elevation), -0.22).normalize();
-      forearm.set(side.sign * Math.sin(elevation + flexion), -Math.cos(elevation + flexion), 0).normalize();
-      hinge.crossVectors(upper, forearm).normalize();
+      upper.set(side.sign * Math.sin(elevation), -Math.cos(elevation), -0.22 * raised).normalize();
+      // Define the hinge from the arm's reference plane, not from a cross product of two
+      // nearly parallel limbs. Straightening the elbow must not suddenly roll the arm.
+      hinge.copy(front).addScaledVector(upper, -front.dot(upper)).normalize().multiplyScalar(side.sign);
+      forearm.copy(upper).applyAxisAngle(hinge, flexion);
       axialRotation.setFromAxisAngle(upper, side.sign * MathUtils.degToRad(arm.externalRotationDeg - 90));
       hinge.applyQuaternion(axialRotation);
       forearm.applyQuaternion(axialRotation);
+      planeRotation.setFromAxisAngle(up, -side.sign * MathUtils.degToRad(arm.planeDeg));
+      upper.applyQuaternion(planeRotation);
+      forearm.applyQuaternion(planeRotation);
+      hinge.applyQuaternion(planeRotation);
       normal.crossVectors(hinge, upper).normalize();
       setFrame(side.upperarm, hinge, upper, normal);
       // Distribute forearm roll over the elbow and distal twist instead of
       // placing the full rotation at the midpoint of the forearm.
       normal.crossVectors(hinge, forearm).normalize();
       forearmOrientation.setFromRotationMatrix(basis.makeBasis(hinge, forearm, normal));
-      handNormal.copy(front).addScaledVector(forearm, -front.dot(forearm)).normalize();
+      palmReference.copy(front).applyQuaternion(planeRotation);
+      handNormal.copy(palmReference).addScaledVector(forearm, -palmReference.dot(forearm));
+      if (handNormal.lengthSq() < 1e-10) handNormal.copy(normal);
+      handNormal.normalize();
       handX.crossVectors(forearm, handNormal).normalize();
       desired.setFromRotationMatrix(basis.makeBasis(handX, forearm, handNormal));
       forearmOrientation.slerp(desired, 0.5);
+      // Independent forearm roll is split over proximal and distal bones.
+      rollRotation.setFromAxisAngle(forearm, side.sign * MathUtils.degToRad(arm.forearmRotationDeg) * 0.5);
+      forearmOrientation.premultiply(rollRotation);
       setModelRotation(side.forearm, forearmOrientation);
+      rollRotation.setFromAxisAngle(forearm, side.sign * MathUtils.degToRad(arm.forearmRotationDeg));
+      handNormal.applyQuaternion(rollRotation);
+      handX.applyQuaternion(rollRotation);
 
       // Distal twist places the palms forward, with a straight wrist. Bone
       // lengths/positions and the asset's quantized geometry stay untouched.
       setFrame(side.twist, handX, forearm, handNormal);
       setFrame(side.hand, handX, forearm, handNormal);
+      angles.set(MathUtils.degToRad(arm.wristFlexionDeg), 0, side.sign * MathUtils.degToRad(arm.wristDeviationDeg), 'XYZ');
+      wristRotation.setFromEuler(angles);
+      side.hand.quaternion.multiply(wristRotation);
     }
     scene.updateWorldMatrix(true, true);
   }
