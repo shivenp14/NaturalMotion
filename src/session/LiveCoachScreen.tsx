@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
 import { createWallAngelReference } from '../anatomy/upperBodySequence';
 import { wallAngelDefaults } from '../anatomy/wallAngel';
@@ -20,9 +20,17 @@ import { MicrophoneSilenceGate } from '../voice/microphoneGate';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { appendCleanup } from './cleanup';
+import { CallStage } from '../ui/CallStage';
 
 export function LiveCoachScreen() {
   const session = useSession();
+  const params = useLocalSearchParams<{ diagnostics?: string }>();
+  const diagnostics = __DEV__ && params.diagnostics === '1';
+  const autoStarted = useRef(false);
+  const mutedRef = useRef(false);
+  const [muted, setMuted] = useState(false);
+  const [details, setDetails] = useState(false);
+  const [mainView, setMainView] = useState<'camera' | 'model'>('camera');
   const latest = useRef(session);
   useEffect(() => { latest.current = session; }, [session]);
   const mounted = useRef(true);
@@ -49,7 +57,7 @@ export function LiveCoachScreen() {
   const lastAttemptSent = useRef('');
   const lastPracticeId = useRef('');
   const [turns, setTurns] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
-  const [text, setText] = useState('Show me a wall angel demonstration, then return to a goalpost position.');
+  const [text, setText] = useState('');
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   const stop = useCallback(async (reason = 'Session stopped. Camera and microphone released.') => {
@@ -57,7 +65,7 @@ export function LiveCoachScreen() {
     healthRequest.current?.abort(); healthRequest.current = null;
     client.current?.stop(); client.current = null;
     const previous = audio.current; audio.current = null;
-    observation.current = null; poseClock.current = null; practiceSession.current.reset(); lastAttemptSent.current = ''; lastPracticeId.current = ''; microphoneGate.current.reset();
+    observation.current = null; poseClock.current = null; practiceSession.current.reset(); lastAttemptSent.current = ''; lastPracticeId.current = ''; microphoneGate.current.reset(); mutedRef.current = false; setMuted(false);
     latest.current.reset();
     if (mounted.current) { setPending(true); setMode(null); setPlanning(false); setReport(null); setPracticeView(practiceSession.current.snapshot); }
     stopping.current = appendCleanup(stopping.current, previous ? () => previous.stop() : undefined);
@@ -87,7 +95,7 @@ export function LiveCoachScreen() {
       setPracticeView(previous => previous === view ? previous : view);
       if (view.stage === 'performing') {
         setReport(previous => previous === null ? previous : null);
-        if (view.recordingId !== lastPracticeId.current) { audio.current?.interrupt(); lastPracticeId.current = view.recordingId ?? ''; }
+        if (view.recordingId !== lastPracticeId.current) { setMainView('camera'); audio.current?.interrupt(); lastPracticeId.current = view.recordingId ?? ''; }
       }
       if (view.review) setReport(previous => previous?.attemptId === view.review!.attemptId ? previous : view.review);
       if (view.attempt && view.attempt.attemptId !== lastAttemptSent.current && client.current) {
@@ -104,13 +112,14 @@ export function LiveCoachScreen() {
   }, [mode, evaluate]);
 
   async function start(nextMode: 'live' | 'local', streamMicrophone = true) {
-    if (pending || mode || Platform.OS !== 'android') return;
+    if (pending || mode) return;
+    if (Platform.OS !== 'android') { setMessage('Voice conversations are currently available on Android.'); return; }
     const run = ++epoch.current;
     setPending(true); setMessage(nextMode === 'live' ? 'Connecting the live coach…' : 'Preparing a local devices test…');
     try {
       await stopping.current;
       if (nextMode === 'live') {
-        if (!backendUrl) throw new Error('Set EXPO_PUBLIC_API_BASE_URL to the backend address.');
+        if (!backendUrl) throw new Error(diagnostics ? 'Set EXPO_PUBLIC_API_BASE_URL to the backend address.' : 'The coach is not configured yet. Please try again later.');
         const request = new AbortController(); healthRequest.current = request;
         const timeout = setTimeout(() => request.abort(), 10000);
         let response: Response;
@@ -118,8 +127,8 @@ export function LiveCoachScreen() {
         finally { clearTimeout(timeout); if (healthRequest.current === request) healthRequest.current = null; }
         if (!response.ok) throw new Error('Live backend is unavailable.');
         const health = await response.json();
-        if (!health.conversationConfigured) throw new Error('Configure GEMINI_API_KEY on the backend first.');
-        if (!health.plannerConfigured) throw new Error('Configure OPENAI_API_KEY on the backend for movement planning.');
+        if (!health.conversationConfigured) throw new Error(diagnostics ? 'Configure GEMINI_API_KEY on the backend first.' : 'Voice coaching is unavailable right now.');
+        if (!health.plannerConfigured) throw new Error(diagnostics ? 'Configure OPENAI_API_KEY on the backend for movement planning.' : 'Movement coaching is unavailable right now.');
       }
       if (run !== epoch.current || !mounted.current) return;
       permitting.current = true;
@@ -131,7 +140,7 @@ export function LiveCoachScreen() {
       if (run !== epoch.current || !mounted.current) return;
       if (AppState.currentState !== 'active') throw new Error('Return to the app and start the session again.');
       counters.current = { microphone: 0, images: 0, peak: 0 }; setStats({ ...counters.current });
-      setTurns([]); setCameraWarning(''); setMode(nextMode);
+      setMainView('camera'); setTurns([]); setCameraWarning(''); setMode(nextMode);
       if (nextMode === 'live') {
         const context = latest.current;
         const connection = new LiveClient({ baseUrl: backendUrl!, context: { type: 'context', sequence: context.sequence, playback: context.playback },
@@ -140,7 +149,7 @@ export function LiveCoachScreen() {
             if (action.type === 'play_sequence') {
               const checked = latest.current.acceptSequence(action.sequence, action.assessmentPlan, action.presentationPlan);
               if (!checked.ok) throw new Error(checked.error);
-              practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastAttemptSent.current = '';
+              practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastAttemptSent.current = ''; setMainView('model');
             } else if (action.type === 'set_avatar_view') latest.current.setAvatarView(action.view);
             else if (action.type === 'start_practice') {
               evaluate(); practiceSession.current.requestStart(); setReport(null);
@@ -180,7 +189,7 @@ export function LiveCoachScreen() {
       await driver.start((data, peak, durationMs = 100) => {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
-        if (streamMicrophone) {
+        if (streamMicrophone && !mutedRef.current) {
           try {
             const packets = microphoneGate.current.push({ data, peak, durationMs });
             for (const packet of packets.audio) client.current?.send({ type: 'audio', data: packet });
@@ -188,8 +197,9 @@ export function LiveCoachScreen() {
           } catch { void stop('Microphone audio could not be processed. Restart the live session.'); }
         }
       }, error => { if (run === epoch.current) void stop(error); }, warning => {
-        if (run === epoch.current && mounted.current) setMessage(warning);
+        if (run === epoch.current && mounted.current) setCameraWarning(warning);
       });
+      if (run === epoch.current && mounted.current && nextMode === 'live' && !diagnostics) client.current?.send({ type: 'text', text: 'Please greet me briefly and ask where I feel stiff or what movement I would like help with. Wait for my response before demonstrating.' });
       if (run === epoch.current && mounted.current) setMessage(nextMode === 'local'
         ? 'Local devices test. Audio and images stay on this phone. The speaker button plays a test tone.'
         : streamMicrophone ? 'Live camera and microphone connected. Ask for a demonstration.'
@@ -198,6 +208,12 @@ export function LiveCoachScreen() {
       if (run === epoch.current) await stop(error instanceof Error ? error.message : 'Could not start the live coach.');
     } finally { if (run === epoch.current && mounted.current) setPending(false); }
   }
+
+  useEffect(() => {
+    if (!diagnostics && !autoStarted.current) { autoStarted.current = true; void start('live'); }
+  // Start once on entry. Errors expose an explicit retry.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnostics]);
 
   function control(name: LiveControl) {
     if (name === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
@@ -216,6 +232,55 @@ export function LiveCoachScreen() {
   const connectionMarker = pending ? 'live-starting' : mode === 'live' ? 'live-connected' : mode === 'local' ? 'live-local-ready' : 'live-stopped';
   const playbackMarker = !session.sequence ? 'idle' : !activePlayback ? 'preparing' :
     activePlayback.status === 'playing' ? 'active' : activePlayback.status;
+
+  if (!diagnostics) return <SafeAreaView style={styles.screen} testID="live-screen">
+    {mode ? <CallStage mainView={mainView} connectionMarker={connectionMarker}
+      camera={<CameraPoseView onFrame={onPose} onCameraImage={image => {
+        counters.current.images++;
+        if (Date.now() - image.observedAt < 2000) client.current?.send({ type: 'image', data: image.data, observedAt: image.observedAt });
+      }} onError={(error, fatal) => { if (fatal) void stop(error); else setCameraWarning(error); }} />}
+      model={<AnatomyViewport sequence={session.sequence} paused={session.paused} viewPreference={session.avatarView}
+        automaticView={plannedAvatarView(session.presentationPlan, session.sequence, activePlayback?.stepIndex ?? 0)}
+        onPlaybackChange={recordPlayback} showLab={false} stage />}
+      onSwap={() => setMainView(value => value === 'camera' ? 'model' : 'camera')}>
+      <View style={styles.callStatus} pointerEvents="none">
+        <Text style={styles.status} accessibilityLiveRegion="polite">{planning ? 'Preparing your demonstration…' : report?.message ?? (session.sequence ? practiceView.message : 'Tell me where you feel stiff.')}</Text>
+        {!!cameraWarning && <Text style={styles.note} accessibilityRole="alert">{cameraWarning}</Text>}
+      </View>
+      <View style={styles.callButtons}>
+        <Pressable testID="live-details" accessibilityRole="button" accessibilityLabel="Open conversation and movement controls" onPress={() => setDetails(true)} style={styles.roundButton}><Text style={styles.roundText}>···</Text></Pressable>
+        <Pressable testID="live-mute" accessibilityRole="button" accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'} accessibilityState={{ selected: muted }} onPress={() => {
+          mutedRef.current = !mutedRef.current; setMuted(mutedRef.current); microphoneGate.current.reset();
+          if (mutedRef.current) client.current?.send({ type: 'audio_end' });
+        }} style={styles.roundButton}><View style={styles.micIcon}><View style={styles.micCapsule} /><View style={styles.micArc} /><View style={styles.micStem} />{muted && <View style={styles.micSlash} />}</View></Pressable>
+        <Pressable testID="live-end" accessibilityRole="button" accessibilityLabel="End conversation" onPress={() => void stop().then(() => router.back())} style={styles.roundButton}><Text style={styles.roundText}>×</Text></Pressable>
+      </View>
+      <Text testID={`live-playback-${playbackMarker}`} style={styles.hiddenMarker}>{playbackMarker}</Text>
+    </CallStage> : <View style={styles.connecting} testID={connectionMarker}>
+      <Text style={styles.status} accessibilityLiveRegion="polite">{pending ? 'Connecting your conversation…' : message}</Text>
+      {!pending && Platform.OS === 'android' && <Pressable testID="live-start" accessibilityRole="button" onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>Try again</Text></Pressable>}
+      <Pressable testID="live-end" accessibilityRole="button" onPress={() => void stop().then(() => router.back())} style={styles.smallButton}><Text style={styles.buttonText}>Back</Text></Pressable>
+    </View>}
+    <Modal visible={details && !!mode} animationType="slide" onRequestClose={() => setDetails(false)}>
+      <SafeAreaView style={styles.screen}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.top}><Text style={styles.title}>Conversation</Text><Pressable accessibilityRole="button" onPress={() => setDetails(false)} style={styles.smallButton}><Text style={styles.buttonText}>Close</Text></Pressable></View>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <Text style={styles.note}>{planning ? 'Preparing your demonstration…' : message}</Text>
+            {session.sequence && <View style={styles.row}>
+              <Pressable testID={session.paused ? 'live-resume' : 'live-pause'} accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
+              <Pressable testID="live-clear" accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Stop movement</Text></Pressable>
+            </View>}
+            {turns.map((turn, index) => <View key={index} style={styles.panel}><Text style={styles.speaker}>{turn.role === 'user' ? 'You' : 'Coach'}</Text><Text style={styles.status}>{turn.text}</Text></View>)}
+            {mode === 'live' && <View style={styles.panel}>
+              <TextInput testID="live-request" accessibilityLabel="Message your coach" placeholder="Message your coach…" placeholderTextColor={theme.muted} style={styles.input} multiline value={text} onChangeText={setText} />
+              <Pressable testID="live-send" accessibilityRole="button" disabled={pending || !text.trim()} accessibilityState={{ disabled: pending || !text.trim() }} onPress={() => { if (!pending && text.trim()) { client.current?.send({ type: 'text', text: text.trim() }); setText(''); } }} style={styles.button}><Text style={styles.buttonText}>Send</Text></Pressable>
+            </View>}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  </SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.screen} testID="live-screen">
@@ -279,6 +344,18 @@ export function LiveCoachScreen() {
 }
 
 const styles = StyleSheet.create({
+  connecting: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
+  callStatus: { position: 'absolute', top: 18, left: 20, right: 20, zIndex: 3, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 16, padding: 12 },
+  callButtons: { position: 'absolute', right: 16, bottom: 28, zIndex: 4, flexDirection: 'row', gap: 8 },
+  roundButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#303030', alignItems: 'center', justifyContent: 'center' },
+  roundText: { color: '#fff', fontSize: 24, fontWeight: '600' },
+  hiddenMarker: { position: 'absolute', width: 1, height: 1, opacity: 0 },
+  micIcon: { width: 24, height: 28, alignItems: 'center', justifyContent: 'center' },
+  micCapsule: { position: 'absolute', top: 2, width: 9, height: 15, borderWidth: 1.6, borderColor: '#fff', borderRadius: 6 },
+  micArc: { position: 'absolute', top: 9, width: 17, height: 12, borderWidth: 1.5, borderTopWidth: 0, borderColor: '#fff', borderBottomLeftRadius: 9, borderBottomRightRadius: 9 },
+  micStem: { position: 'absolute', top: 21, width: 1.5, height: 4, backgroundColor: '#fff' },
+  micSlash: { position: 'absolute', width: 27, height: 2, backgroundColor: '#fff', transform: [{ rotate: '-45deg' }] },
+
   screen: { flex: 1, backgroundColor: theme.background },
   top: { paddingLeft: 16, paddingRight: __DEV__ ? 76 : 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { color: theme.text, fontSize: 20, fontWeight: '600', flexShrink: 1 },

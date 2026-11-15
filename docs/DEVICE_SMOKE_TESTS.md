@@ -30,6 +30,12 @@ npm run check:device
 
 Ordinary CI keeps running `npm run check` and `npm run export:android`; it does not silently launch a device or consume provider credits. The full device suite uses the explicitly labeled development **Test live requests with text** mode and sends one text request to the actual configured Gemini/OpenAI path. Native microphone capture remains local in this mode, preventing ambient speech from replacing the scripted text request; camera images and provider responses remain real. Normal **Start live coach** still streams microphone input. This typed test does not establish hands-free speech quality. Local mode uses the clearly labeled authored reference and sends no media to providers.
 
+## Conversation redesign
+
+The landing screen opens `/live` and connects automatically. The camera and anatomy model remain mounted when swapping views. The three call buttons open conversation/movement controls, mute/unmute microphone transmission, and end the session. The conversation sheet contains pause/resume, stop, transcripts, and text requests. Practice still waits for the user's spoken finish cue before sending an attempt for review.
+
+Development tools are available at `/development`; the existing explicit-start smoke flows now use `/live?diagnostics=1`. These diagnostics require a development build. They preserve the existing local/text test paths without adding diagnostic controls to the conversation screen.
+
 ## What the cases prove
 
 | Check | Assertions |

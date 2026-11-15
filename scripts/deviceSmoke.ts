@@ -58,7 +58,7 @@ async function main() {
     catch { add({ name: 'device_setup', required: true, status: 'unsupported', reason: 'The bound command is unavailable. Call device_open again; do not select or close another session.' }); return; }
     const app = JSON.parse(await readFile('app.json', 'utf8')).expo;
     const appId: string = app.android.package;
-    const liveUrl = `${app.scheme}://live`;
+    const liveUrl = `${app.scheme}://live?diagnostics=1`;
     const environment = ['--env', `APP_ID=${appId}`, '--env', `LIVE_URL=${liveUrl}`, '--env', `DIAGNOSTIC_URL=${app.scheme}://vision-debug`];
     const replay = (file: string) => invoke(['replay', resolve('tests/device', file), ...environment, '--keep-session', '--timeout', '90000', '--json'], file.replace('.ad', ''));
     await run('app_launch', async () => {
@@ -112,7 +112,7 @@ async function main() {
   } finally {
     if (opened && !deviceFailed) await run('final_cleanup', async () => {
       const app = JSON.parse(await readFile('app.json', 'utf8')).expo;
-      await invoke(['open', app.android.package, `${app.scheme}://live`, '--json'], 'cleanup-route');
+      await invoke(['open', app.android.package, `${app.scheme}://live?diagnostics=1`, '--json'], 'cleanup-route');
       await invoke(['press', 'id="live-end"', '--json'], 'cleanup-stop');
       await invoke(['wait', 'id="live-stopped"', '15000', '--json'], 'cleanup-verified', 20000);
     });
