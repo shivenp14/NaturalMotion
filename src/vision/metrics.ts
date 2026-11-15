@@ -75,10 +75,11 @@ export function computeUpperBodyMetrics(observation: PoseObservation): UpperBody
   const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
   const midlineX = (leftShoulder.x + rightShoulder.x) / 2;
   const above = (elbow: Point) => (shoulderMidY - elbow.y) / shoulderWidth;
-  // Positive when the elbow sits further from the body midline than its own shoulder. A crossed
-  // arm goes negative here, which a bare |dx| would score as a wide spread.
+  // Positive only when the elbow is further out on its own shoulder's side of the midline. Both a
+  // tucked elbow and one crossed past the opposite shoulder go negative; a bare |dx| scored the
+  // second as a wide spread.
   const outward = (shoulder: Point, elbow: Point) =>
-    (Math.abs(elbow.x - midlineX) - Math.abs(shoulder.x - midlineX)) / shoulderWidth;
+    (Math.sign(shoulder.x - midlineX) * (elbow.x - shoulder.x)) / shoulderWidth;
   const gap = (ear: Point, shoulder: Point) => (shoulder.y - ear.y) / shoulderWidth;
   const earToShoulder = Math.min(gap(leftEar, leftShoulder), gap(rightEar, rightShoulder));
   if (earToShoulder <= 0.05) return null;

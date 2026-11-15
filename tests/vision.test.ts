@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { toPoseObservation } from '../src/vision/landmarks';
+import { toPoseObservation, isFreshFrame } from '../src/vision/landmarks';
 import { computeUpperBodyMetrics } from '../src/vision/metrics';
 import { StatusStabilizer } from '../src/vision/stability';
 import { evaluateGoalpostArms, GOALPOST_ARMS_CHECK_ID } from '../src/vision/checks/goalpostArms';
@@ -258,6 +258,28 @@ test('elbows crossed in front of the chest do not count as spread', () => {
   assert.ok(metrics);
   assert.ok(metrics.elbowSpread < 0);
   assert.equal(evaluateGoalpostArms(observe(crossed), playback)?.status, 'needs_adjustment');
+});
+
+test('elbows crossed past the opposite shoulder do not count as spread', () => {
+  const crossedPast = {
+    ...cleanGoalpost,
+    leftElbow: { x: 0.66, y: 0.5 },
+    rightElbow: { x: 0.34, y: 0.5 },
+  };
+
+  const metrics = computeUpperBodyMetrics(observe(crossedPast));
+
+  assert.ok(metrics);
+  assert.ok(metrics.elbowSpread < 0);
+  assert.equal(evaluateGoalpostArms(observe(crossedPast), playback)?.status, 'needs_adjustment');
+});
+
+test('a buffered frame that repeats its timestamp is not fresh', () => {
+  assert.equal(isFreshFrame(null, 1_000), true);
+  assert.equal(isFreshFrame(1_000, 1_001), true);
+  assert.equal(isFreshFrame(1_000, 1_000), false);
+  assert.equal(isFreshFrame(1_000, 999), false);
+  assert.equal(isFreshFrame(1_000, undefined), true);
 });
 
 test('metrics refuse a joint below the visibility floor', () => {

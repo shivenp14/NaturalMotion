@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../ui/theme';
 import type { FormEvent, PlaybackState, PoseObservation } from '../../shared/contracts';
 import { CameraPoseView } from '../CameraPoseView';
-import { toPoseObservation, type PoseFrameLike } from '../landmarks';
+import { toPoseObservation, isFreshFrame, type PoseFrameLike } from '../landmarks';
 import { StatusStabilizer, type FormStatus } from '../stability';
 import { DEFAULT_GOALPOST_THRESHOLDS, evaluateGoalpostArms } from '../checks/goalpostArms';
 
@@ -43,6 +43,7 @@ export function VisionDebugScreen() {
   const [frameCount, setFrameCount] = useState(0);
   const [cameraGeneration, setCameraGeneration] = useState(0);
   const [trackingLost, setTrackingLost] = useState(false);
+  const lastFrameTimestamp = useRef<number | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -55,6 +56,11 @@ export function VisionDebugScreen() {
   }, []);
 
   function handleFrame(frame: PoseFrameLike) {
+    // A buffered result delivered after a stall carries the timestamp it already had. Rejecting it
+    // keeps a stale observation from refreshing the stabilizer or delaying tracking loss.
+    if (!isFreshFrame(lastFrameTimestamp.current, frame.timestamp)) return;
+    if (frame.timestamp !== undefined) lastFrameTimestamp.current = frame.timestamp;
+
     const now = Date.now();
     if (playback.current.updatedAt === 0) {
       playback.current = { ...playback.current, updatedAt: now };
@@ -71,6 +77,7 @@ export function VisionDebugScreen() {
 
   function reset() {
     stabilizer.current.reset();
+    lastFrameTimestamp.current = null;
     setSnapshot(null);
     setFrameCount(0);
     setTrackingLost(false);

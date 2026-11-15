@@ -25,7 +25,21 @@ export type VisionJointName = (typeof UPPER_BODY_JOINTS)[number]['name'];
 /** The parts of a pose-library frame this track reads. Structural, so tests need no native code. */
 export type PoseFrameLike = {
   readonly landmarks: ArrayLike<number>;
+  /** Monotonic result clock in milliseconds. Not wall time; never compare it with `Date.now()`. */
+  readonly timestamp?: number;
 };
+
+/**
+ * True when a frame is newer than the last one accepted.
+ *
+ * After a JavaScript stall the library can hand back a result it already delivered. That repeats
+ * the previous timestamp, and accepting it would refresh the stabilizer and hide a tracking loss.
+ * Comparing the library's own monotonic clock avoids mixing it with wall time.
+ */
+export function isFreshFrame(previous: number | null, next: number | undefined): boolean {
+  if (next === undefined || previous === null) return true;
+  return next > previous;
+}
 
 const STRIDE = 4;
 
