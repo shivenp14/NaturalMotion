@@ -68,18 +68,20 @@ export function computeUpperBodyMetrics(observation: PoseObservation): UpperBody
   }
 
   const shoulderWidth = distance(leftShoulder, rightShoulder);
-  if (shoulderWidth <= 0.01) return null;
+  if (shoulderWidth < 0.08) return null;
 
   const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
   const above = (elbow: Point) => (shoulderMidY - elbow.y) / shoulderWidth;
   const outward = (shoulder: Point, elbow: Point) => Math.abs(elbow.x - shoulder.x) / shoulderWidth;
   const gap = (ear: Point, shoulder: Point) => (shoulder.y - ear.y) / shoulderWidth;
+  const earToShoulder = Math.min(gap(leftEar, leftShoulder), gap(rightEar, rightShoulder));
+  if (earToShoulder <= 0.05) return null;
 
   return {
     shoulderWidth,
     // Report the worse arm: catching either elbow dropping matters more than the average.
     elbowAboveShoulder: Math.min(above(leftElbow), above(rightElbow)),
     elbowSpread: Math.min(outward(leftShoulder, leftElbow), outward(rightShoulder, rightElbow)),
-    earToShoulder: Math.min(gap(leftEar, leftShoulder), gap(rightEar, rightShoulder)),
+    earToShoulder,
   };
 }

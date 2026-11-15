@@ -139,6 +139,23 @@ test('metrics are unavailable without both shoulders', () => {
   assert.equal(computeUpperBodyMetrics(observe(noLeftShoulder)), null);
 });
 
+test('hallucinated skeletons with inverted ears or collapsed shoulders are rejected', () => {
+  const invertedEars = {
+    ...cleanGoalpost,
+    leftEar: { x: 0.44, y: 0.57 },
+    rightEar: { x: 0.56, y: 0.57 },
+  };
+  const collapsedOnFace = {
+    ...cleanGoalpost,
+    leftShoulder: { x: 0.48, y: 0.5 },
+    rightShoulder: { x: 0.52, y: 0.5 },
+  };
+
+  assert.equal(computeUpperBodyMetrics(observe(invertedEars)), null);
+  assert.equal(computeUpperBodyMetrics(observe(collapsedOnFace)), null);
+  assert.equal(evaluateGoalpostArms(observe(invertedEars), playback)?.status, 'not_observable');
+});
+
 test('a status becomes stable only after consecutive frames agree', () => {
   const stabilizer = new StatusStabilizer(4, 1_000);
 
