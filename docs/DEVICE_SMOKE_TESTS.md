@@ -60,3 +60,5 @@ Continue manual visual review for avatar deformation, animation changes and layo
 ## Recorded run
 
 Android 17/API 37 emulator, combined development APK, actual configured providers: **5 pass, 0 fail, 1 unsupported**. The unsupported item was pose-landmark arrival from the virtual no-person feed; diagnostic sampled-image arrival and restart passed. See [DEVICE_SMOKE_RESULTS.json](DEVICE_SMOKE_RESULTS.json) for the compact evidence. Earlier manual avatar findings remain in [LATENCY_AND_AVATAR_VERIFICATION.md](LATENCY_AND_AVATAR_VERIFICATION.md).
+
+The Samsung SM-S928U physical Android 17 phone also passed five checks, with pose arrival unsupported while no person was tracked. Startup fixes, earlier failures and remaining human acceptance are recorded in [PHYSICAL_PHONE_TEST_RESULTS.md](PHYSICAL_PHONE_TEST_RESULTS.md).

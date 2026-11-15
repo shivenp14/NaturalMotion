@@ -4,6 +4,7 @@ import { encodePcm16 } from './pcm';
 import { PcmDecodeBudget } from './pcmDecodeBudget';
 
 export async function requestLiveMicrophonePermission() {
+  if (await AudioManager.checkRecordingPermissions() === 'Granted') return;
   if (await AudioManager.requestRecordingPermissions() !== 'Granted') throw new Error('Microphone permission is required for live conversation.');
 }
 
@@ -50,7 +51,9 @@ export function createLiveAudio(): LiveAudio {
         android: { mode: 'inCommunication', communicationDevice: 'speaker' } });
       await AudioManager.setAudioSessionActivity(true);
       if (stopped) { await AudioManager.setAudioSessionActivity(false); return; }
-      context = new AudioContext({ sampleRate: 24000, androidOutputProfile: 'voiceCommunication' });
+      // Android's default low-latency MMAP output is rejected on the test phone.
+      // Balanced output keeps communication routing with a more compatible buffer.
+      context = new AudioContext({ sampleRate: 24000, androidOutputProfile: 'voiceCommunication', latencyHint: 'balanced' });
       const startingContext = context;
       await startingContext.resume();
       if (stopped || context !== startingContext) return;

@@ -6,6 +6,8 @@ press 'id="live-start"'
 wait 'id="live-connected"' 20000
 scroll down --until 'id="live-request"'
 fill 'id="live-request"' "Demonstrate one wall angel: five seconds up, hold for one second, five seconds back, and finish at goalpost."
+keyboard dismiss
+scroll down --until 'id="live-send"'
 press 'id="live-send"'
 wait 'id="live-playback-active"' 30000
 scroll up --until 'id="live-pause"'

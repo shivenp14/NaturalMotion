@@ -10,7 +10,7 @@ import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
 import type { PoseObservation } from '../shared/contracts';
 import type { LiveAudio } from '../voice/LiveAudio.types';
 import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
-import { requestCameraPermission } from 'react-native-pose-detection';
+import { getCameraPermission, requestCameraPermission } from 'react-native-pose-detection';
 import { CameraPoseView } from '../vision/CameraPoseView';
 import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/landmarks';
 import { deriveFormPlan, SequenceFormEvaluator } from '../vision/checks/registry';
@@ -115,7 +115,8 @@ export function LiveCoachScreen() {
       if (run !== epoch.current || !mounted.current) return;
       permitting.current = true;
       try {
-        if (!(await requestCameraPermission()).granted) throw new Error('Camera permission is required.');
+        const cameraPermission = await getCameraPermission();
+        if (!cameraPermission.granted && !(await requestCameraPermission()).granted) throw new Error('Camera permission is required.');
         await requestLiveMicrophonePermission();
       } finally { permitting.current = false; }
       if (run !== epoch.current || !mounted.current) return;
