@@ -31,7 +31,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   content: { flex: 1, width: '100%', maxWidth: 600, alignSelf: 'center', paddingHorizontal: 24, paddingBottom: 20, justifyContent: 'flex-end' },
   brand: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, paddingBottom: 44 },
-  logoBox: { borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.64)', boxShadow: '0 0 24px 10px rgba(255,255,255,0.8)' },
+  logoBox: { borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: 'rgba(32,48,64,0.08)', boxShadow: '0 8px 24px rgba(24,45,66,0.12), 0 2px 5px rgba(24,45,66,0.06)' },
   logo: { width: 240, height: 240, maxWidth: '100%' },
   subtitle: { fontSize: 14, color: '#596778', textAlign: 'center' },
   button: { minHeight: 58, backgroundColor: '#252525', borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
