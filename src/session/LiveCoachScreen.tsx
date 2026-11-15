@@ -51,7 +51,6 @@ export function LiveCoachScreen() {
   useEffect(() => { practice.current = practiceStartedAt; }, [practiceStartedAt]);
   const lastReport = useRef('');
   const lastFormSentAt = useRef(0);
-  const [turns, setTurns] = useState<{ role: 'user' | 'assistant'; text: string }[]>([]);
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   const stop = useCallback(async (reason = 'Session stopped. Camera and microphone released.') => {
@@ -128,7 +127,7 @@ export function LiveCoachScreen() {
       if (run !== epoch.current || !mounted.current) return;
       if (AppState.currentState !== 'active') throw new Error('Return to the app and start the session again.');
       counters.current = { microphone: 0, images: 0, peak: 0 }; setStats({ ...counters.current });
-      setTurns([]); setCameraWarning(''); setMainView('camera'); setPracticeDetected(false); motion.current.reset(); setMode(nextMode);
+      setCameraWarning(''); setMainView('camera'); setPracticeDetected(false); motion.current.reset(); setMode(nextMode);
       if (nextMode === 'live') {
         const context = latest.current;
         const connection = new LiveClient({ baseUrl: backendUrl!, context: { type: 'context', sequence: context.sequence, playback: context.playback },
@@ -149,11 +148,7 @@ export function LiveCoachScreen() {
             if (event.type === 'interrupted') audio.current?.interrupt();
             if (event.type === 'turn_complete') audio.current?.finishReply();
             if (event.type === 'planning') setPlanning(event.active);
-            if (event.type === 'transcript') setTurns(previous => {
-              const last = previous.at(-1);
-              return last?.role === event.role ? [...previous.slice(0, -1), { role: event.role, text: (last.text + event.text).slice(-4000) }] :
-                [...previous, { role: event.role, text: event.text }].slice(-20);
-            });
+
           },
           onClose: reason => { if (run === epoch.current && mounted.current) void stop(reason); },
         });
@@ -204,7 +199,6 @@ export function LiveCoachScreen() {
     if (status === 'completed' && canPractice && practiceDetected && practice.current === null) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); }
     lastPlaybackStatus.current = status;
   }, [session.playback?.status, canPractice, practiceDetected]);
-  const latestAssistant = [...turns].reverse().find(turn => turn.role === 'assistant')?.text;
   const connectionMarker = pending ? 'live-starting' : mode === 'live' ? 'live-connected' : mode === 'local' ? 'live-local-ready' : 'live-stopped';
   const playbackMarker = !session.sequence ? 'idle' : !session.playback ? 'preparing' :
     session.playback.status === 'playing' ? 'active' : session.playback.status;
@@ -224,7 +218,7 @@ export function LiveCoachScreen() {
         if (mainView === 'model') { setMainView('camera'); setPracticeDetected(true); if (canPractice) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); } }
         else setMainView('model');
       }}><Text style={styles.callPreviewLabel}>{mainView === 'camera' ? 'Anatomy' : 'You'}</Text></Pressable>
-      {!!(latestAssistant || planning) && <View pointerEvents="none" style={styles.callCaption}><Text numberOfLines={3} style={styles.captionText}>{planning ? 'Preparing your demonstration…' : latestAssistant}</Text></View>}
+      {planning && <View pointerEvents="none" style={styles.callStatus}><Text style={styles.statusText}>Preparing your demonstration…</Text></View>}
       {!!cameraWarning && <Text style={styles.warning} accessibilityRole="alert">{cameraWarning}</Text>}
       <View style={styles.callButtons}>
         <Pressable testID="live-mute" accessibilityRole="button" accessibilityLabel={muted ? 'Unmute microphone' : 'Mute microphone'} accessibilityState={{ selected: muted }} onPress={() => { mutedRef.current = !mutedRef.current; setMuted(mutedRef.current); }} style={styles.roundButton}><View style={styles.micIcon}><View style={styles.micCapsule} /><View style={styles.micArc} /><View style={styles.micStem} />{muted && <View style={styles.micSlash} />}</View></Pressable>
@@ -257,7 +251,7 @@ const styles = StyleSheet.create({
   previewTouch: { position: 'absolute', left: 20, bottom: 24, width: 105, height: 150, borderRadius: 18, zIndex: 4, justifyContent: 'flex-end', padding: 5 },
   callPreviewLabel: { overflow: 'hidden', backgroundColor: 'rgba(25,25,25,0.88)', color: '#fff', fontSize: 11, textAlign: 'center', borderRadius: 10, paddingVertical: 4 },
   callButtons: { position: 'absolute', right: 20, bottom: 28, zIndex: 4, flexDirection: 'row', gap: 12 },
-  callCaption: { position: 'absolute', top: 18, left: 20, right: 20, zIndex: 3, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 16, padding: 12 },
+  callStatus: { position: 'absolute', top: 18, left: 20, right: 20, zIndex: 3, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 16, padding: 12 },
   warning: { position: 'absolute', top: 100, left: 20, right: 20, zIndex: 3, color: '#222', backgroundColor: '#fff', padding: 8 },
   micIcon: { width: 24, height: 28, alignItems: 'center', justifyContent: 'center' },
   micCapsule: { position: 'absolute', top: 2, width: 9, height: 15, borderWidth: 1.6, borderColor: '#fff', borderRadius: 6 },
@@ -278,7 +272,7 @@ const styles = StyleSheet.create({
   stageHeader: { position: 'absolute', top: 18, left: 16, right: 16, zIndex: 3, alignItems: 'flex-start', gap: 12 },
   stageBadge: { overflow: 'hidden', color: '#fff', backgroundColor: '#303030', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, fontSize: 11, fontWeight: '700' },
   captionCard: { backgroundColor: 'rgba(245,245,245,0.92)', padding: 14, borderRadius: 16, maxWidth: '85%' },
-  captionText: { color: '#292929', fontSize: 14, lineHeight: 20 },
+  statusText: { color: '#292929', fontSize: 14, lineHeight: 20 },
   stageControls: { position: 'absolute', right: 16, bottom: 18, zIndex: 3, gap: 10 },
   roundButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#303030', alignItems: 'center', justifyContent: 'center' },
   endButton: { backgroundColor: '#666666' },
