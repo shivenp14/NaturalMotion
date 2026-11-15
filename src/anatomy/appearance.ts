@@ -2,9 +2,9 @@ import { Color, DoubleSide, MeshStandardMaterial } from 'three';
 
 /** Cosmetic art direction. Fiber contrast is not muscle activation. */
 export const anatomyAppearance = {
-  background: '#090909',
+  background: '#ffffff',
   graphite: '#777777',
-  highlight: '#c2e9a8',
+  highlight: '#444444',
   roughness: 0.78,
   fiberContrast: 0.2,
   fiberFrequency: 2300,

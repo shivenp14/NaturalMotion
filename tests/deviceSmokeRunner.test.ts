@@ -33,7 +33,10 @@ if (args[0] === 'replay') {
   const report = JSON.parse(result.stdout);
   assert.equal(report.outcome, 'fail'); assert.equal(report.counts.fail, 1);
   assert.equal(await readFile(join(artifacts, 'failure.png'), 'utf8'), 'mock screenshot artifact');
-  const commands = (await readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line)[0]);
+  const invocations: string[][] = (await readFile(calls, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  const commands = invocations.map(parameters => parameters[0]);
+  const app = JSON.parse(await readFile('app.json', 'utf8')).expo;
+  assert.ok(invocations[1].includes(`LIVE_URL=${app.scheme}://live?diagnostics=1`), 'device replays must use the explicit diagnostics entry, which does not auto-start provider media');
   assert.deepEqual(commands, ['open', 'replay', 'snapshot', 'screenshot']);
   assert.equal(JSON.parse(await readFile(join(artifacts, 'summary.json'), 'utf8')).exitCode, 1);
 });

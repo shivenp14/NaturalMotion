@@ -203,8 +203,8 @@ function MetricRow({ label, value }: { label: string; value: number | undefined 
 
 function statusColor(status: FormStatus | null) {
   if (status === 'aligned') return theme.accent;
-  if (status === 'needs_adjustment') return '#e9c9a8';
-  if (status === 'not_observable') return '#e9a8a8';
+  if (status === 'needs_adjustment') return '#595959';
+  if (status === 'not_observable') return '#444444';
   return theme.border;
 }
 
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   status: { color: theme.text, fontSize: 18, fontWeight: '500' },
   section: { color: theme.accent, fontSize: 10, letterSpacing: 1.4, marginTop: 10 },
   muted: { color: theme.muted, fontSize: 12, lineHeight: 18 },
-  error: { color: '#e9a8a8', fontSize: 12, lineHeight: 18 },
+  error: { color: '#444444', fontSize: 12, lineHeight: 18 },
   metricRow: { flexDirection: 'row', justifyContent: 'space-between' },
   metricLabel: { color: theme.muted, fontSize: 13 },
   metricValue: { color: theme.text, fontSize: 13, fontVariant: ['tabular-nums'] },
