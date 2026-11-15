@@ -12,7 +12,7 @@ export type CameraPoseViewProps = {
 };
 
 /**
- * Live camera with the pose overlay.
+ * Live camera with invisible pose tracking and an unpainted preview.
  *
  * This is the only file in `src/vision/` that imports the native package. Everything else is pure
  * TypeScript, so the geometry stays testable without a phone.
@@ -64,7 +64,7 @@ export function CameraPoseView({
       liveFramesEnabled={Boolean(onCameraImage) && active}
       onCameraImage={onCameraImage}
       data={{ mode: 'throttled', throttleMs: 100, worldLandmarks: true }}
-      overlay={{ color: theme.accent, lineWidth: 3, pointRadius: 4, minVisibility: 0.5 }}
+      overlay={false}
       onPose={onFrame}
       onReady={(event) =>
         onReady?.({
