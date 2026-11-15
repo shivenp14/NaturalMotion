@@ -4,13 +4,13 @@ import { MicrophoneSilenceGate } from '../src/voice/microphoneGate';
 
 const chunk = (data: string, peak = 0, durationMs = 100) => ({ data, peak, durationMs });
 
-test('long initial near-silence sends no continuous audio and preserves the latest 300ms', () => {
+test('long initial near-silence sends no continuous audio and preserves the latest second', () => {
   const gate = new MicrophoneSilenceGate();
   for (let index = 0; index < 10000; index++) {
     assert.deepEqual(gate.push(chunk(`quiet-${index}`, 0.0001)), { audio: [], audioStreamEnd: false });
   }
   assert.deepEqual(gate.push(chunk('speech', 0.03)), {
-    audio: ['quiet-9997', 'quiet-9998', 'quiet-9999', 'speech'], audioStreamEnd: false,
+    audio: [...Array.from({ length: 10 }, (_, i) => `quiet-${9990 + i}`), 'speech'], audioStreamEnd: false,
   });
 });
 
@@ -36,12 +36,12 @@ test('hangover preserves phrase pauses and ends a quiet stream exactly once', ()
     assert.deepEqual(gate.push(chunk(`idle-${index}`)), { audio: [], audioStreamEnd: false });
   }
   assert.deepEqual(gate.push(chunk('next-turn', 0.1)), {
-    audio: ['idle-997', 'idle-998', 'idle-999', 'next-turn'], audioStreamEnd: false,
+    audio: [...Array.from({ length: 10 }, (_, i) => `idle-${990 + i}`), 'next-turn'], audioStreamEnd: false,
   });
 });
 
 test('pre-roll uses captured durations, retaining a full window of variable size chunks', () => {
-  const gate = new MicrophoneSilenceGate();
+  const gate = new MicrophoneSilenceGate({ preRollMs: 300 });
   for (const data of ['a', 'b', 'c', 'd']) gate.push(chunk(data, 0, 80));
   gate.push(chunk('e', 0, 80));
   assert.deepEqual(gate.push(chunk('speech', 0.01, 80)).audio, ['b', 'c', 'd', 'e', 'speech']);
@@ -78,4 +78,11 @@ test('invalid sample metadata is explicit rather than silently suppressing possi
 test('background voices also pass; this energy gate does not claim speaker discrimination', () => {
   const gate = new MicrophoneSilenceGate();
   assert.deepEqual(gate.push(chunk('background-speech', 0.01)).audio, ['background-speech']);
+});
+
+test('quiet sentence onset is preserved when voice detection opens late', () => {
+  const gate = new MicrophoneSilenceGate();
+  for (let i = 0; i < 8; i++) gate.push(chunk(`opening-word-${i}`, 0.0002));
+  assert.deepEqual(gate.push(chunk('audible-word', 0.03)).audio,
+    [...Array.from({ length: 8 }, (_, i) => `opening-word-${i}`), 'audible-word']);
 });

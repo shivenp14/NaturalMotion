@@ -40,7 +40,7 @@ export class MicrophoneSilenceGate {
 
   constructor(options: MicrophoneGateOptions = {}) {
     this.threshold = options.threshold ?? 0.0005;
-    this.preRollMs = options.preRollMs ?? 300;
+    this.preRollMs = options.preRollMs ?? 1000;
     this.hangoverMs = options.hangoverMs ?? 900;
     if (!Number.isFinite(this.threshold) || this.threshold <= 0 || this.threshold > 1 ||
       !Number.isFinite(this.preRollMs) || this.preRollMs < 0 || this.preRollMs > 2000 ||

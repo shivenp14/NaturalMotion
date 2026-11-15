@@ -21,6 +21,7 @@ import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { appendCleanup } from './cleanup';
 import { CallStage } from '../ui/CallStage';
+import { conversationTranscript } from '../live/transcript';
 
 export function LiveCoachScreen() {
   const session = useSession();
@@ -244,7 +245,7 @@ export function LiveCoachScreen() {
         onPlaybackChange={recordPlayback} showLab={false} stage />}
       onSwap={() => setMainView(value => value === 'camera' ? 'model' : 'camera')}>
       <View style={styles.callStatus} pointerEvents="none">
-        <Text style={styles.status} accessibilityLiveRegion="polite">{planning ? 'Preparing your demonstration…' : report?.message ?? (session.sequence ? practiceView.message : 'Tell me where you feel stiff.')}</Text>
+        <Text style={styles.status} accessibilityLiveRegion="polite">{pending ? 'Connecting microphone… Please wait.' : planning ? 'Preparing your demonstration…' : report?.message ?? (session.sequence ? practiceView.message : 'Tell me where you feel stiff.')}</Text>
         {!!cameraWarning && <Text style={styles.note} accessibilityRole="alert">{cameraWarning}</Text>}
       </View>
       <View style={styles.callButtons}>
@@ -271,7 +272,7 @@ export function LiveCoachScreen() {
               <Pressable testID={session.paused ? 'live-resume' : 'live-pause'} accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
               <Pressable testID="live-clear" accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Stop movement</Text></Pressable>
             </View>}
-            {turns.map((turn, index) => <View key={index} style={styles.panel}><Text style={styles.speaker}>{turn.role === 'user' ? 'You' : 'Coach'}</Text><Text style={styles.status}>{turn.text}</Text></View>)}
+            {turns.map((turn, index) => <View key={index} style={styles.panel}><Text style={styles.speaker}>{turn.role === 'user' ? 'You' : 'Coach'}</Text><Text style={styles.status}>{conversationTranscript(turn.role, turn.text)}</Text></View>)}
             {mode === 'live' && <View style={styles.panel}>
               <TextInput testID="live-request" accessibilityLabel="Message your coach" placeholder="Message your coach…" placeholderTextColor={theme.muted} style={styles.input} multiline value={text} onChangeText={setText} />
               <Pressable testID="live-send" accessibilityRole="button" disabled={pending || !text.trim()} accessibilityState={{ disabled: pending || !text.trim() }} onPress={() => { if (!pending && text.trim()) { client.current?.send({ type: 'text', text: text.trim() }); setText(''); } }} style={styles.button}><Text style={styles.buttonText}>Send</Text></Pressable>
@@ -337,7 +338,7 @@ export function LiveCoachScreen() {
             const checked = session.acceptSequence(reference); if (!checked.ok) setMessage(checked.error);
           }} style={styles.button}><Text style={styles.buttonText}>Play authored reference</Text></Pressable>
         </View>}
-        {turns.map((turn, index) => <View key={index} style={styles.panel}><Text style={styles.speaker}>{turn.role === 'user' ? 'You' : 'Guide'}</Text><Text selectable style={styles.note}>{turn.text}</Text></View>)}
+        {turns.map((turn, index) => <View key={index} style={styles.panel}><Text style={styles.speaker}>{turn.role === 'user' ? 'You' : 'Guide'}</Text><Text selectable style={styles.note}>{conversationTranscript(turn.role, turn.text)}</Text></View>)}
       </ScrollView>
     </SafeAreaView>
   );

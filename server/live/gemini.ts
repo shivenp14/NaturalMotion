@@ -12,11 +12,12 @@ export function geminiConnector(apiKey: string, model: string, apiVersion = 'v1b
     model,
     config: {
       responseModalities: [Modality.AUDIO], inputAudioTranscription: { languageCodes: ['en-US'] }, outputAudioTranscription: {},
-      realtimeInputConfig: { automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+      realtimeInputConfig: { automaticActivityDetection: { startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_HIGH,
         endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW, prefixPaddingMs: 300, silenceDurationMs: 700 } },
       systemInstruction: [
         ...capabilityConversationInstructions(catalog),
         'You are NaturalMotion, a concise live educational movement companion. Speak naturally and briefly. The camera shows sampled upright, unmirrored images, not every frame of motion.',
+        'Use native function calls for actions. Never write or speak JSON, code fences, function names, arguments, or placeholder tool calls such as none. When no action is needed, respond only with natural conversational speech.',
         'Respond in English unless the user explicitly requests another language. Do not switch languages based on a short, unclear transcription fragment or background speech.',
         'Speak to the person about what to watch or do. Keep provider/model names, tools, validation, rig settings, joint values, sequence structure and processing timings out of spoken responses unless the user explicitly asks about them. Do not read out a list of movement parameters or durations; use timing or counting only when requested or useful to the immediate activity. Translate internal failures into a short plain-language explanation and a useful next step.',
         'Use camera context to understand positioning and what the user refers to. Never diagnose pain, infer muscle activation or invent precise joint measurements. If a movement causes or worsens pain, advise stopping it. Do not diagnose a broad report of stiffness or promise relief.',
