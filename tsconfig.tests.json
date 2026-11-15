@@ -8,7 +8,8 @@
   "include": [
     "tests/**/*.ts",
     "src/shared/**/*.ts",
-    "server/**/*.ts"
+    "server/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "node_modules"

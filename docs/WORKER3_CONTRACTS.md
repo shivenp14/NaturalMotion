@@ -48,7 +48,7 @@ The same catalog and policy must be configured at every boundary:
 - `createAgentServer` accepts server-owned `catalog`, `compositionPolicy`, and reviewed `cues` options. It never trusts client-supplied capability definitions or executable policy.
 - `AnatomyViewport` must independently revalidate at execution, as Shiven's branch already does.
 
-After anatomy integration, configure Shiven's `upperBodyPreviewCatalog` and `validateUpperBodyComposition` together at these boundaries. Do not substitute an unconditional-allow policy. The local production catalog remains empty and no rendering/vision support is claimed merely because these contracts now match. Shiven's renderer and policy implementation have not been merged into this local working tree.
+PR #12 is now merged into main and integrated here. `anatomyAgentCapabilities` configures Shiven's `upperBodyPreviewCatalog` and `validateUpperBodyComposition` together in the app root and server entrypoint. Do not substitute an unconditional-allow policy. The generic shared default catalog remains empty; the six explicit runtime components have no camera checks. The session passes accepted sequences to the renderer and stores phase/status reports. Indexed modification/replay are intentionally not advertised by this configured service; complete replacement sequences support movement changes.
 
 ## Feedback routing
 

@@ -64,8 +64,8 @@ export function VoiceDevPanel() {
         },
         onPlaybackAction: action => {
           if (action.type === 'stop_session') sessionRef.current.reset();
-          else if (action.type === 'pause_session') sessionRef.current.setPhase('idle');
-          else throw new Error('Anatomical playback is not connected yet.');
+          else if (action.type === 'pause_session') sessionRef.current.setPaused(true);
+          else throw new Error('Indexed playback controls are not connected. Request a complete replacement sequence.');
         },
         onTranscript: text => {
           if (mounted.current && run === epoch.current) setTurns(previous => [...previous, { role: 'user' as const, text }].slice(-40));

@@ -43,7 +43,8 @@
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "export:android": "expo export --platform android",
-    "server": "node --env-file-if-exists=server/.env --import tsx server/index.ts"
+    "server": "node --env-file-if-exists=server/.env --import tsx server/index.ts",
+    "test:agent": "node --import tsx scripts/agentSmoke.ts"
   },
   "private": true
 }

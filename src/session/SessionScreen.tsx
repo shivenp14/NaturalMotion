@@ -4,12 +4,13 @@ import { AnatomyViewport } from '../anatomy/AnatomyViewport';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { VoiceDevPanel } from '../voice/VoiceDevPanel';
+import { AgentDevPanel } from './AgentDevPanel';
 
 export function SessionScreen() {
-  const { phase, sequence, catalog } = useSession();
+  const { phase, sequence, catalog, paused, playback, setPaused, recordPlayback, reset } = useSession();
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.wordmark}>NaturalMotion</Text>
           <Text style={styles.kicker}>MOVE WITH UNDERSTANDING</Text>
@@ -18,7 +19,18 @@ export function SessionScreen() {
           <Text style={styles.title}>Make room{ '\n' }for movement.</Text>
           <Text style={styles.description}>Voice-guided movement, brought to life.</Text>
         </View>
-        <AnatomyViewport sequence={sequence} />
+        {__DEV__ && <AgentDevPanel />}
+        {/* Reset the lab on session entry/exit so clearing a session cannot resume an old lab animation. */}
+        <AnatomyViewport key={sequence ? 'session' : 'lab'} sequence={sequence} paused={paused} onPlaybackChange={recordPlayback} />
+        {__DEV__ && sequence && <View style={styles.development}>
+          <Text style={styles.devText}>Sequence: {sequence.id} · {playback ? `Group ${playback.stepIndex + 1} · ${playback.phase} · ${playback.status}` : 'Preparing'}</Text>
+          <Pressable accessibilityRole="button" onPress={() => setPaused(!paused)} style={styles.button}>
+            <Text style={styles.buttonText}>{paused ? 'Resume movement' : 'Pause movement'}</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={reset} style={styles.button}>
+            <Text style={styles.buttonText}>Clear movement</Text>
+          </Pressable>
+        </View>}
         <View style={styles.status}>
           <View style={styles.dot} />
           <Text style={styles.description}>Your guide is getting ready</Text>
@@ -31,7 +43,7 @@ export function SessionScreen() {
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
             <Text style={styles.devText}>Session: {phase} · Registered components: {catalog.length}</Text>
-            <Text style={styles.devText}>Anatomy and voice test panels are available. Agent movement integration is the next step; camera checks are not connected.</Text>
+            <Text style={styles.devText}>Validated agent sequences play on the anatomy model. Camera checks are not connected.</Text>
             <VoiceDevPanel />
           </View>
         )}

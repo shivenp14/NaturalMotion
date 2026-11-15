@@ -14,7 +14,7 @@ const object = (properties: Record<string, Schema>): Schema => ({
 });
 const action = (type: string, properties: Record<string, Schema> = {}) => object({ type: { type: 'string', enum: [type] }, ...properties });
 /** Schema mirrors Shiven's command/group wire format; domain validation still runs afterwards. */
-export function createResponseSchema(catalog: readonly ComponentDefinition[], allowParallel: boolean): Schema {
+export function createResponseSchema(catalog: readonly ComponentDefinition[], allowParallel: boolean, allowPlaybackEdits = true): Schema {
   const actions = [action('speak_text', { text: string }), action('speak_cue', { cueId: string }),
     action('pause_session', { reason: { type: 'string', enum: ['user_request', 'safety'] } }),
     action('stop_session', { reason: { type: 'string', enum: ['user_request', 'safety'] } }), action('no_action')];
@@ -28,8 +28,8 @@ export function createResponseSchema(catalog: readonly ComponentDefinition[], al
       parallel: { type: 'array', items: command }, durationSeconds: { type: 'number' }, holdSeconds: { type: 'number' },
     })] } : command;
     const sequence = object({ id: string, steps: { type: 'array', items: step } });
-    actions.push(action('play_sequence', { sequence }),
-      action('modify_playback', { stepIndex: { type: 'integer' }, step }),
+    actions.push(action('play_sequence', { sequence }));
+    if (allowPlaybackEdits) actions.push(action('modify_playback', { stepIndex: { type: 'integer' }, step }),
       action('replay_demonstration', { stepIndex: { type: 'integer' } }));
   }
   return object({ actions: { type: 'array', items: { anyOf: actions } } });
@@ -57,6 +57,9 @@ export type AgentServiceOptions = {
   catalog?: readonly ComponentDefinition[];
   cues?: Readonly<Record<string, string>>;
   compositionPolicy?: CompositionPolicy;
+  /** Trusted renderer instructions, never supplied by the requesting client. */
+  movementGuidance?: unknown;
+  allowPlaybackEdits?: boolean;
 };
 
 /** No audio or camera footage is sent to the provider; only a transcript and verified capabilities. */
@@ -81,8 +84,9 @@ export async function generateAgentReturn(
         'Pause or stop only when the user requests it or safety requires it. Otherwise converse or ask a short clarifying question.',
       ].join('\n'),
       input: JSON.stringify({ utterance: request.utterance, catalog,
-        currentSequence: request.currentSequence, cues }),
-      text: { format: { type: 'json_schema', name: 'movement_actions', strict: true, schema: createResponseSchema(catalog, Boolean(options.compositionPolicy)) } },
+        currentSequence: request.currentSequence, cues, movementGuidance: options.movementGuidance }),
+      text: { format: { type: 'json_schema', name: 'movement_actions', strict: true,
+        schema: createResponseSchema(catalog, Boolean(options.compositionPolicy), options.allowPlaybackEdits) } },
     }),
   });
   if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}.`);
@@ -100,6 +104,10 @@ export async function generateAgentReturn(
   }
   const payload: unknown = JSON.parse(parts.join(''));
   if (!isRecord(payload) || !hasOnlyKeys(payload, ['actions'])) throw new Error('Invalid provider response.');
+  if (options.allowPlaybackEdits === false && Array.isArray(payload.actions) && payload.actions.some(action =>
+    isRecord(action) && ['modify_playback', 'replay_demonstration'].includes(String(action.type)))) {
+    throw new Error('Indexed playback controls are not connected.');
+  }
   const checked = validateAgentReturn({ decisionId: randomUUID(),
     trigger: { type: 'user_utterance', id: randomUUID() }, actions: payload.actions }, {
     catalog, cues, currentSequence: request.currentSequence, compositionPolicy: options.compositionPolicy,

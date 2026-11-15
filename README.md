@@ -11,7 +11,7 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 - Native recognition/TTS adapters, validated half-duplex turn coordination, and a development echo test.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The agent-facing movement catalog is intentionally empty.** The anatomy viewer executes validated [composable upper-body sequences](docs/MOVEMENT_COMPOSITION.md), emits playback events and includes a wall-angel reference preview. The local OpenAI backend, HTTP agent adapter, and native voice test panel are implemented; PR #15 reports a successful live provider request and emulator recognition. Agent-to-anatomy integration, camera checks, and physical-phone spoken-response acceptance remain pending. The session button stays disabled until those integrations exist.
+The app and backend now share six verified upper-body animation components and the renderer composition validator. The development text/voice paths can send accepted agent sequences to the anatomy model. The generic default catalog and camera-check/cue registries remain empty. PR #15 reports prior live provider access; live movement generation and physical-phone spoken-response acceptance still need verification. The final session button stays disabled while the full coaching flow is under construction. See [integration verification](docs/AGENT_ANATOMY_INTEGRATION.md).
 
 ## Quick start
 
@@ -81,7 +81,7 @@ Person 1 coordinates dependency/config/lockfile edits. Person 3 coordinates shar
 - `src/shared/validateSequence.ts`: validate untrusted agent output against registered parameter ranges before playback.
 - `src/shared/formEvents.ts`: reject events from the wrong sequence/step, unsupported checks, and old/future observations. The vision owner must also gate checks by supported phases and validate adapter output.
 - `src/session/SessionProvider.tsx`: `acceptSequence`, `phase`, `sequence`, and `reset`. Extend session coordination here rather than creating disconnected stores.
-- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Sequence playback and its reserved callback remain the next integration step; see `docs/ANATOMY_PROGRESS.md`.
+- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Accepted sequences execute here and report playback state to the session; see `docs/MOVEMENT_COMPOSITION.md`.
 - `src/vision/types.ts`: camera adapter and form-evaluator boundaries.
 - `src/agent/types.ts` / `src/voice/types.ts`: service and audio adapter boundaries.
 - `src/agent/validateAgentReturn.ts`: validate complete action batches before dispatch.
