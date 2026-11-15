@@ -27,6 +27,15 @@ export function getFocusCodes(focus: AnatomyFocus): Set<number> {
   return codes;
 }
 
+export function getPartFocusCodes(partIds: readonly string[], side: 'left' | 'right'): Set<number> {
+  const ids = new Set(partIds);
+  const codes = new Set<number>();
+  vocabulary.parts.forEach((part, index) => {
+    if (ids.has(part.id)) codes.add(1 + 2 * index + (side === 'right' ? 1 : 0));
+  });
+  return codes;
+}
+
 export const anatomyViewAngles: Record<AnatomyView, number> = {
   front: 0,
   back: Math.PI,

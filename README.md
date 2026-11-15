@@ -10,7 +10,7 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 - Runtime sequence validation and feedback freshness helpers with protocol tests.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The movement catalog is intentionally empty.** The anatomy asset and visual viewer are integrated, with a [development-only wall-angel rig proof](docs/WALL_ANGEL_PROGRESS.md). Sequence playback, pose estimation, microphone capture, and agent integration are not connected yet. The session button stays disabled until those integrations exist. The team selected wall angels as the first movement family; finish deformation review and agree its component/check definitions before registering it.
+**The agent-facing movement catalog is intentionally empty.** The anatomy viewer now executes validated [composable upper-body sequences](docs/MOVEMENT_COMPOSITION.md), emits playback events and includes a [wall-angel reference preview](docs/WALL_ANGEL_PROGRESS.md). Pose estimation, microphone capture, agent/session integration and camera-check metadata are not connected yet. The session button stays disabled until those integrations exist. Register only the capabilities and checks agreed by the team; optional deformation polish is tracked separately.
 
 ## Quick start
 

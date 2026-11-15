@@ -2,6 +2,8 @@
 
 Shiven and Derrick selected the wall angel as the first movement family. This is an isolated development preview inside the anatomy viewport, not the final session UI or a registered agent capability.
 
+Follow-on implementation: the Play composition control now compiles the wall angel from reusable left/right shoulder and elbow primitives and executes through the viewport's `sequence`/`onPlaybackChange` interface. A one-second setup blend, primitive-specific highlighting, pause/resume and phase events are implemented. See [movement composition](MOVEMENT_COMPOSITION.md) for the current API and rendering limits. The sections below record the original rig-proof checkpoint; its catalog/session integration limitations still apply, but generalized renderer execution is no longer pending. Current automated checks pass all 26 tests.
+
 ## Implemented
 
 - Inspect rest, goalpost, midpoint and upper poses on the actual anatomical rig.

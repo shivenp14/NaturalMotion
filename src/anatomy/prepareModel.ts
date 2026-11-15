@@ -25,7 +25,10 @@ export function prepareAnatomyModel(source: Object3D) {
   if (meshes.length === 0) throw new Error('No rigged anatomical body was found.');
 
   function setFocus(focus: AnatomyFocus) {
-    const codes = getFocusCodes(focus);
+    setFocusCodes(getFocusCodes(focus));
+  }
+
+  function setFocusCodes(codes: ReadonlySet<number>) {
     for (const mesh of meshes) {
       const parts = mesh.geometry.getAttribute('_part_id');
       const selection = mesh.geometry.getAttribute('anatomyFocus');
@@ -41,5 +44,5 @@ export function prepareAnatomyModel(source: Object3D) {
     }
     material.dispose();
   }
-  return { scene, material, meshes, setFocus, dispose };
+  return { scene, material, meshes, setFocus, setFocusCodes, dispose };
 }

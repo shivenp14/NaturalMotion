@@ -9,6 +9,8 @@ import { bodyAssetUri } from './modelAsset';
 import { prepareAnatomyModel } from './prepareModel';
 import { anatomyViewAngles, type AnatomyFocus, type AnatomyView } from './regions';
 import { createWallAngelRig, sampleWallAngelCycle, type WallAngelPreview } from './wallAngel';
+import type { PlaybackState } from '../shared/contracts';
+import { createPlaybackReporter, sampleUpperBodyProgram, type UpperBodyProgram } from './upperBodySequence';
 
 export type AnatomySceneProps = {
   focus: AnatomyFocus;
@@ -16,9 +18,12 @@ export type AnatomySceneProps = {
   onReady: () => void;
   preview?: WallAngelPreview;
   onPreviewComplete?: () => void;
+  program?: UpperBodyProgram | null;
+  playbackPaused?: boolean;
+  onPlaybackChange?: (state: PlaybackState) => void;
 };
 
-export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete }: AnatomySceneProps) {
+export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange }: AnatomySceneProps) {
   const gltf = useLoader(GLTFLoader, bodyAssetUri);
   const model = useMemo(() => prepareAnatomyModel(gltf.scene), [gltf.scene]);
   const rig = useMemo(() => createWallAngelRig(model.scene), [model]);
@@ -28,7 +33,29 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete 
   const previousMode = useRef<WallAngelPreview['mode']>('rest');
   const firstFrame = useRef(true);
   const running = useRef(false);
-  const movementVisible = !!preview && preview.mode !== 'rest';
+  const programTime = useRef(0);
+  const programDone = useRef(false);
+  const focusedStep = useRef(-1);
+  const callback = useRef(onPlaybackChange);
+  useLayoutEffect(() => { callback.current = onPlaybackChange; }, [onPlaybackChange]);
+  const report = useRef<ReturnType<typeof createPlaybackReporter> | null>(null);
+  const movementVisible = !!program || (!!preview && preview.mode !== 'rest');
+  useLayoutEffect(() => {
+    programTime.current = 0;
+    programDone.current = false;
+    focusedStep.current = -1;
+    firstFrame.current = true;
+    report.current = program ? createPlaybackReporter(program.id, (state) => callback.current?.(state)) : null;
+    if (program) { rig.beginPreparation(); rig.prepare(0); }
+    invalidate();
+  }, [program, rig, invalidate]);
+  useLayoutEffect(() => {
+    if (!program || !report.current || programDone.current) return;
+    const sample = programTime.current < 1 ? { stepIndex: 0, phase: 'preparing' as const } : sampleUpperBodyProgram(program, programTime.current - 1);
+    report.current(sample.stepIndex, sample.phase, playbackPaused ? 'paused' : 'playing', Date.now());
+    firstFrame.current = true;
+    invalidate();
+  }, [program, playbackPaused, invalidate]);
   useLayoutEffect(() => {
     camera.position.set(0, movementVisible ? 1.03 : 0.86, movementVisible ? 4.6 : 3.65);
     camera.lookAt(0, movementVisible ? 1.03 : 0.86, 0);
@@ -36,6 +63,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete 
     invalidate();
   }, [camera, movementVisible, invalidate]);
   useLayoutEffect(() => {
+    if (program) { running.current = false; return; }
     const mode = preview?.mode ?? 'rest';
     running.current = mode === 'playing';
     if (mode === 'rest') {
@@ -51,8 +79,27 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete 
     }
     previousMode.current = mode;
     invalidate();
-  }, [rig, preview, invalidate]);
+  }, [rig, preview, program, invalidate]);
   useFrame((_, delta) => {
+    if (program && report.current) {
+      if (playbackPaused || programDone.current) return;
+      if (firstFrame.current) firstFrame.current = false;
+      else programTime.current += Math.min(delta, 0.1);
+      if (programTime.current < 1) {
+        rig.prepare(programTime.current);
+      } else {
+        const sample = sampleUpperBodyProgram(program, programTime.current - 1);
+        rig.applyPose(sample.pose);
+        if (focusedStep.current !== sample.stepIndex) {
+          model.setFocusCodes(program.segments[sample.stepIndex].focusCodes);
+          focusedStep.current = sample.stepIndex;
+        }
+        report.current(sample.stepIndex, sample.phase, sample.completed ? 'completed' : 'playing', Date.now());
+        programDone.current = sample.completed;
+      }
+      if (!programDone.current) invalidate();
+      return;
+    }
     if (!running.current || !preview) return;
     // The first demand frame may follow a long idle; background stalls must
     // not jump through an entire demonstration either.
@@ -66,9 +113,13 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete 
     } else invalidate();
   });
   useLayoutEffect(() => {
-    model.setFocus(focus);
+    if (program) {
+      const index = programTime.current < 1 ? 0 : sampleUpperBodyProgram(program, programTime.current - 1).stepIndex;
+      model.setFocusCodes(program.segments[index].focusCodes);
+      focusedStep.current = index;
+    } else model.setFocus(focus);
     invalidate();
-  }, [model, focus, invalidate]);
+  }, [model, focus, program, invalidate]);
   useEffect(() => {
     onReady();
     return () => model.dispose();

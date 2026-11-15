@@ -1,4 +1,5 @@
 import { MathUtils, Matrix4, Quaternion, Vector3, type Bone, type Object3D } from 'three';
+import { initialUpperBodyPose, upperBodyPoseError, type UpperBodyPose } from './upperBodyPose';
 
 /** Rendering limits for this authored preview, not prescribed human ROM. */
 export type WallAngelParameters = {
@@ -57,6 +58,7 @@ export function createWallAngelRig(scene: Object3D) {
     return bone;
   }
   const sides = (['L', 'R'] as const).map((side) => ({
+    key: side === 'L' ? 'left' as const : 'right' as const,
     sign: side === 'L' ? 1 : -1,
     clavicle: requireBone(`clavicle${side}`),
     scapula: requireBone(`scapula${side}`),
@@ -82,6 +84,8 @@ export function createWallAngelRig(scene: Object3D) {
   const normal = new Vector3();
   const handX = new Vector3();
   const front = new Vector3(0, 0, 1);
+  const handNormal = new Vector3();
+  const axialRotation = new Quaternion();
 
   function setModelRotation(bone: Bone, orientation: Quaternion) {
     bone.parent!.updateWorldMatrix(true, false);
@@ -103,11 +107,20 @@ export function createWallAngelRig(scene: Object3D) {
   function apply(progress: number, parameters: WallAngelParameters = wallAngelDefaults) {
     validateWallAngelParameters(parameters);
     if (!Number.isFinite(progress) || progress < 0 || progress > 1) throw new Error('Invalid wall-angel pose progress.');
+    const arm = { elevationDeg: 90 + (parameters.topAngleDeg - 90) * progress, elbowFlexionDeg: 90 - 70 * progress, externalRotationDeg: 90 };
+    applyPose({ left: { ...arm }, right: { ...arm } });
+  }
+
+  function applyPose(pose: UpperBodyPose) {
+    const error = upperBodyPoseError(pose);
+    if (error) throw new Error(error);
     reset();
     scene.getWorldQuaternion(rootRotation);
-    const elevation = MathUtils.degToRad(90 + (parameters.topAngleDeg - 90) * progress);
-    const flexion = MathUtils.degToRad(90 - 70 * progress);
     for (const side of sides) {
+      const arm = pose[side.key];
+      const elevation = MathUtils.degToRad(arm.elevationDeg);
+      const flexion = MathUtils.degToRad(arm.elbowFlexionDeg);
+      const progress = MathUtils.clamp((arm.elevationDeg - 90) / 55, 0, 1);
       // Scapula is a sibling of upperarm on this rig. Author its motion too,
       // while leaving pelvis/spine/neck at their original local transforms.
       rotation.setFromAxisAngle(front, side.sign * MathUtils.degToRad(3 + 8 * progress));
@@ -120,23 +133,40 @@ export function createWallAngelRig(scene: Object3D) {
       upper.set(side.sign * Math.sin(elevation), -Math.cos(elevation), -0.22).normalize();
       forearm.set(side.sign * Math.sin(elevation + flexion), -Math.cos(elevation + flexion), 0).normalize();
       hinge.crossVectors(upper, forearm).normalize();
+      axialRotation.setFromAxisAngle(upper, side.sign * MathUtils.degToRad(arm.externalRotationDeg - 90));
+      hinge.applyQuaternion(axialRotation);
+      forearm.applyQuaternion(axialRotation);
       normal.crossVectors(hinge, upper).normalize();
       setFrame(side.upperarm, hinge, upper, normal);
       // Distribute forearm roll over the elbow and distal twist instead of
       // placing the full rotation at the midpoint of the forearm.
       normal.crossVectors(hinge, forearm).normalize();
       forearmOrientation.setFromRotationMatrix(basis.makeBasis(hinge, forearm, normal));
-      handX.crossVectors(forearm, front).normalize();
-      desired.setFromRotationMatrix(basis.makeBasis(handX, forearm, front));
+      handNormal.copy(front).addScaledVector(forearm, -front.dot(forearm)).normalize();
+      handX.crossVectors(forearm, handNormal).normalize();
+      desired.setFromRotationMatrix(basis.makeBasis(handX, forearm, handNormal));
       forearmOrientation.slerp(desired, 0.5);
       setModelRotation(side.forearm, forearmOrientation);
 
       // Distal twist places the palms forward, with a straight wrist. Bone
       // lengths/positions and the asset's quantized geometry stay untouched.
-      setFrame(side.twist, handX, forearm, front);
-      setFrame(side.hand, handX, forearm, front);
+      setFrame(side.twist, handX, forearm, handNormal);
+      setFrame(side.hand, handX, forearm, handNormal);
     }
     scene.updateWorldMatrix(true, true);
   }
-  return { apply, reset };
+  applyPose(initialUpperBodyPose());
+  const preparedLocal = new Map(controlled.map((bone) => [bone, bone.quaternion.clone()]));
+  reset();
+  const preparationFrom = new Map(controlled.map((bone) => [bone, bone.quaternion.clone()]));
+  function beginPreparation() {
+    for (const bone of controlled) preparationFrom.get(bone)!.copy(bone.quaternion);
+  }
+  function prepare(progress: number) {
+    if (!Number.isFinite(progress) || progress < 0 || progress > 1) throw new Error('Invalid preparation progress.');
+    const eased = smoothstep(progress);
+    for (const bone of controlled) bone.quaternion.copy(preparationFrom.get(bone)!).slerp(preparedLocal.get(bone)!, eased);
+    scene.updateWorldMatrix(true, true);
+  }
+  return { apply, applyPose, beginPreparation, prepare, reset };
 }

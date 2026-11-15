@@ -18,14 +18,16 @@ Steps run in order. Inside a group, all commands start together, interpolate ove
 
 Legacy single-command sequences remain compatible. Use `getStepCommands(step)` when inspecting components: direct `step.componentId` access no longer covers every step. A group retains one `stepIndex` for playback and feedback. The feedback gate accepts configured check IDs from any member and retains existing freshness and `not_observable` handling.
 
-## First proposed vocabulary — not registered yet
+## Renderer vocabulary — implemented, not registered with the agent yet
 
 - Shoulder elevation, separately addressable on the left/right.
 - Shoulder external rotation, separately addressable on the left/right.
 - Elbow flexion, separately addressable on the left/right.
 - Pose holding, expressed by the group's `holdSeconds` rather than a joint-writing command.
 
-The first implementation may use side-specific component IDs because current parameter contracts accept numbers only. Final IDs, angle meanings, parameter limits and anatomical channels must match the calibrated rig implementation before registration. We have not invented executable capabilities or vision checks in the production catalog.
+`upperBodyPreviewCatalog` exposes `left_` and `right_` variants of `shoulder_elevation`, `elbow_flexion` and `shoulder_external_rotation`. Every command takes explicit `fromDeg` and `toDeg`. Rendering bounds are elevation 90–150, elbow flexion 20–90 and shoulder rotation 80–100. Elevation plus elbow flexion must stay within 140–190 for each arm. These are authored rendering coordinates, not clinical goniometry: shoulder rotation 90 is the calibrated goalpost reference, with only a small offset currently supported. Scapula/clavicle motion is derived by the rig coordinator, not supplied by the agent.
+
+Commands may omit channels to retain their previous values. A one-sided motion is executable independently; the engine does not dispatch by an exercise ID. Metadata lists only represented educational muscle regions. Camera view remains `unconfigured`, with no landmarks or form checks claimed until Derrick supplies them. The production catalog remains empty.
 
 ## Wall angel as a reference sequence
 
@@ -36,7 +38,9 @@ The first implementation may use side-specific component IDs because current par
 | Hold | Retain the reached pose | Rise group's hold duration |
 | Return | Reverse shoulder elevation and elbow flexion back to goalpost | Shared travel duration |
 
-The current wall-angel preview already coordinates these joints through its authored rig controller. It does **not** yet compile or execute this generalized protocol. Mapping each independently parameterized primitive to that rig, coordinating scapula/clavicle motion, and calibrating valid combinations are the next implementation work. Do not equate independent joint angles with validated human biomechanics.
+`createWallAngelReference(parameters, id)` now constructs the rise/return groups from six reusable commands. `compileUpperBodySequence` validates them and produces continuous pose segments; `sampleUpperBodyProgram` interpolates all member channels together. The viewport's development Play composition control uses this same pipeline. A renderer-owned one-second preparation blends from the current rig pose into the calibrated goalpost reference before step 0. New programs restart this setup predictably; pause/resume preserves elapsed time within the current program. Removing the sequence returns control to the static preview/rest pose.
+
+Only supported rendering combinations execute. This remains an illustrative rig controller with a small tested envelope, not validated human biomechanics or arbitrary exercise generation. The optional deformation-polish issue still applies.
 
 ## Validation and execution boundary
 
@@ -48,8 +52,24 @@ The current wall-angel preview already coordinates these joints through its auth
 - Channel conflicts are only a structural check. Different channels can still form an unsupported pose; a policy is mandatory for that reason.
 - The production catalog remains empty. `SessionProvider` still passes no composition policy, so parallel agent execution stays disabled until the renderer and its policy are integrated.
 
+## Viewer interface and playback events
+
+`AnatomyViewport` accepts `sequence`, optional `paused`, and `onPlaybackChange`. It compiles/revalidates input before execution, displays an error for unsupported input, and gives an external sequence precedence over development controls. Each step's educational highlight codes come from its component metadata and side, rather than from agent-supplied activation claims. Manual focus resumes after sequence removal.
+
+Events use the existing shared `PlaybackState` shape: `preparing`, `moving`, `holding`, `returning`, then `completed`; status changes include pause/resume. Events emit only at phase, step or status changes, so `updatedAt` remains a phase-entry/freshness boundary rather than being refreshed on every frame. Decreasing total shoulder elevation classifies a step as `returning`; other transitions are `moving`. Completion holds the final pose. The caller should preserve the sequence object identity during ordinary UI updates and replace it when intentionally restarting/changing the program.
+
+Automated tests cover reference interpolation/holds, one-sided execution, side-specific highlighting, bad starts/unknown IDs/channel conflicts/cross-joint limits, real-rig mapping, preparation continuity and phase timestamps. `npm run check` passes all 26 tests; Android export succeeds. Android 17 Expo Go smoke testing verified composed playback, automatic component highlights, pause/resume, completion at goalpost and the development range/speed controls. Physical-phone performance and the full agent/camera/voice flow remain unverified.
+
+The session integration should validate against the same catalog and policy used by the renderer:
+
+```ts
+validateSequence(agentOutput, upperBodyPreviewCatalog, validateUpperBodyComposition);
+```
+
+Pass the successful result's `sequence` to the viewport. The viewport validates again, so bypassing the session validator does not bypass the rendering envelope. The existing `SessionProvider` is deliberately unchanged; update its catalog and policy together during integration. On cancellation or rejection, the session owner must reset its active playback/form-evaluation state; the shared playback protocol currently has no cancellation/error status.
+
 ## Team handoff
 
 Shiven owns primitive-to-rig mappings, the composition policy and execution events. Derrick supplies actual camera/check metadata and observational limits. Roland integrates the agreed vocabulary/policy into sequence generation, validation and the session flow. No shared type fields were removed, and no final UI, vision or voice files were changed for this protocol foundation.
 
-Before enabling the catalog, agree the exact component metadata together, wire the trusted policy through the session boundary, implement playback and phase events, and test a valid wall-angel composition plus rejected conflicting/unsupported compositions on Android. Wall contact and lumbar arching must remain unavailable when the camera cannot establish them.
+Before enabling the catalog, agree camera/check metadata together and wire `upperBodyPreviewCatalog` plus `validateUpperBodyComposition` through Roland's sequence-generation/session boundary. Viewer execution and phase events are implemented, but final agent/session wiring is not. Verify the combined experience on the presentation phone. Wall contact and lumbar arching must remain unavailable when the camera cannot establish them.
