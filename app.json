@@ -34,6 +34,17 @@
           "cameraPermissionText": "NaturalMotion uses the camera to observe your movement. Video stays on this phone."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "0b3b077d-5314-4bec-84d4-6279c8c8ade8"
+      }
+    },
+    "owner": "dersuals-team"
   }
 }
