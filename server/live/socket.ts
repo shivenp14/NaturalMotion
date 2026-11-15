@@ -59,10 +59,6 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         return planMovement(options, utterance, interpretation, current, signal);
       },
       onPlanning: active => send({ type: 'planning', active }),
-      onPlanStarted: id => provider?.sendToolResponse({ functionResponses: [{ id, name: 'request_movement',
-        willContinue: true, scheduling: FunctionResponseScheduling.INTERRUPT,
-        response: { status: 'planning', message: 'Planning started. Briefly acknowledge that you are preparing the demonstration. It is not ready yet; wait for the final result before giving movement instructions.' },
-      }] }),
       apply: (action: LiveAction, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
         if (signal.aborted || closed || pending.size >= 4) { reject(new Error('Session action unavailable.')); return; }
         const commandId = randomUUID();
@@ -84,6 +80,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
       if (closed) return;
       try {
         const content = message.serverContent;
+        // Keep speculative acknowledgments/refusals out of speech while a tool
+        // is outstanding, including output bundled with the initial tool call.
+        const suppressOutput = pendingTools > 0 || Boolean(message.toolCall?.functionCalls?.length);
         if (content?.interrupted) { tools.interrupt(); send({ type: 'interrupted' }); }
         // SDK 3.3 declares voiceActivityType, but the v1beta native-audio
         // endpoint also emits {type, audioOffset}. Both are provider boundaries;
@@ -96,9 +95,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
           tools.noteInput(content.inputTranscription.text ?? '', content.inputTranscription.finished);
           if (content.inputTranscription.text) send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
         }
-        if (content?.outputTranscription?.text) send({ type: 'transcript', role: 'assistant', text: content.outputTranscription.text });
+        if (!suppressOutput && content?.outputTranscription?.text) send({ type: 'transcript', role: 'assistant', text: content.outputTranscription.text });
         for (const part of content?.modelTurn?.parts ?? []) {
-          if (part.inlineData?.data && part.inlineData.mimeType?.startsWith('audio/pcm')) {
+          if (!suppressOutput && part.inlineData?.data && part.inlineData.mimeType?.startsWith('audio/pcm')) {
             if (!base64(part.inlineData.data, 350_000)) { close('Invalid audio received from the conversation provider.'); return; }
             send({ type: 'audio', data: part.inlineData.data });
           }

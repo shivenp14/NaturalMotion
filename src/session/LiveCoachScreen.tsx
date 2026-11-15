@@ -8,7 +8,7 @@ import type { FormReport, LiveAction } from '../live/protocol';
 import type { PoseObservation } from '../shared/contracts';
 import type { LiveAudio } from '../voice/LiveAudio.types';
 import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
-import { requestCameraPermission } from 'react-native-pose-detection';
+import { getCameraPermission, requestCameraPermission } from 'react-native-pose-detection';
 import { CameraPoseView } from '../vision/CameraPoseView';
 import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/landmarks';
 import { deriveFormPlan, SequenceFormEvaluator } from '../vision/checks/registry';
@@ -99,7 +99,7 @@ export function LiveCoachScreen() {
     return () => clearInterval(timer);
   }, [mode, evaluate]);
 
-  async function start(nextMode: 'live' | 'local') {
+  async function start(nextMode: 'live' | 'local', streamMicrophone = true) {
     if (pending || mode) return;
     if (Platform.OS !== 'android') { setMessage('Voice conversations are currently available on Android.'); return; }
     const run = ++epoch.current;
@@ -121,7 +121,8 @@ export function LiveCoachScreen() {
       if (run !== epoch.current || !mounted.current) return;
       permitting.current = true;
       try {
-        if (!(await requestCameraPermission()).granted) throw new Error('Camera permission is required.');
+        const cameraPermission = await getCameraPermission();
+        if (!cameraPermission.granted && !(await requestCameraPermission()).granted) throw new Error('Camera permission is required.');
         await requestLiveMicrophonePermission();
       } finally { permitting.current = false; }
       if (run !== epoch.current || !mounted.current) return;
@@ -146,6 +147,7 @@ export function LiveCoachScreen() {
             if (run !== epoch.current || !mounted.current) return;
             if (event.type === 'audio') audio.current?.enqueue(event.data);
             if (event.type === 'interrupted') audio.current?.interrupt();
+            if (event.type === 'turn_complete') audio.current?.finishReply();
             if (event.type === 'planning') setPlanning(event.active);
             if (event.type === 'transcript') setTurns(previous => {
               const last = previous.at(-1);
@@ -163,12 +165,15 @@ export function LiveCoachScreen() {
       await driver.start((data, peak) => {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
-        if (!mutedRef.current) client.current?.send({ type: 'audio', data });
-      }, error => { if (run === epoch.current) void stop(error); });
+        if (streamMicrophone && !mutedRef.current) client.current?.send({ type: 'audio', data });
+      }, error => { if (run === epoch.current) void stop(error); }, warning => {
+        if (run === epoch.current && mounted.current) setCameraWarning(warning);
+      });
       if (run === epoch.current && mounted.current && nextMode === 'live') client.current?.send({ type: 'text', text: 'Please greet me briefly and ask what stretch I would like to do or where I feel sore. Do not start a demonstration until I respond.' });
       if (run === epoch.current && mounted.current) setMessage(nextMode === 'local'
         ? 'Local devices test. Audio and images stay on this phone. The speaker button plays a test tone.'
-        : 'Live camera and microphone connected. Ask for a demonstration.');
+        : streamMicrophone ? 'Live camera and microphone connected. Ask for a demonstration.'
+          : 'Live text test. Camera and providers are connected; microphone input stays local so speech cannot interrupt typed requests.');
     } catch (error) {
       if (run === epoch.current) await stop(error instanceof Error ? error.message : 'Could not start the live coach.');
     } finally { if (run === epoch.current && mounted.current) setPending(false); }
@@ -236,6 +241,7 @@ export function LiveCoachScreen() {
       <Pressable testID="live-end" accessibilityRole="button" onPress={() => void stop().then(() => router.back())} style={styles.cancelButton}><Text style={styles.cancelText}>Back</Text></Pressable>
     </View>
   </SafeAreaView>;
+
 }
 
 const styles = StyleSheet.create({

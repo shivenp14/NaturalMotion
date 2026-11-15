@@ -25,7 +25,9 @@ export function CameraPoseView({
   onError,
   onCameraImage,
 }: CameraPoseViewProps) {
-  const permission = useCameraPermission();
+  // Read on mount. Re-requesting an already granted permission can briefly
+  // background the activity on Android and cancel the live media session.
+  const permission = useCameraPermission({ ask: false });
 
   if (!permission.granted) {
     return (

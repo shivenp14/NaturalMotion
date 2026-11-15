@@ -46,3 +46,7 @@ All 100 automated tests, lint, both TypeScript checks and Android JavaScript exp
 The avatar is **not fully polished or independently biomechanically validated**. Shoulder/armpit separation, stretching of muscle surfaces and simplification around scapula/chest remain visible, especially at raised poses. The existing optional deformation refinement remains relevant. Highlighting is an educational selection of modeled regions, not measured activation or a complete physiological account. Wall contact, spinal mechanics, compensations and clinical exercise technique are not simulated or certified. Automated validity cannot guarantee every future composition looks equally natural.
 
 Physical-phone acceptance still needs real speech input, audible responses, echo suppression and sustained camera/audio/graphics performance. This screen remains an integration surface for Roland's final UI.
+
+## Current speech policy
+
+The subsequent manual-test revision removes early spoken planning acknowledgments at the user's request. Preparation is indicated on screen and the movement cue follows the final accepted result. The first-audio measurements above are historical for the acknowledgment policy, not current expected response timings.

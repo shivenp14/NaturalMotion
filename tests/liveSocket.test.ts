@@ -59,26 +59,26 @@ test('live provider tool travels through the real planner validator and requires
   socket.send(JSON.stringify({ type: 'text', text: 'Show a wall angel.' }));
   socket.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(3200).toString('base64') }));
   await until(() => media.length > 0);
-  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true }, toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true, outputTranscription: { text: 'Speculative refusal' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } }, toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
   await until(() => messages.some(message => message.type === 'action'));
   assert.equal(messages.some(message => message.type === 'turn_complete'), false, 'A provider completion bundled with a tool call cannot end the request early.');
-  assert.equal(responses.length, 1);
-  assert.equal(responses[0].functionResponses[0].willContinue, true);
-  assert.equal(responses[0].functionResponses[0].response.status, 'planning');
-  assert.equal(responses.some(response => response.functionResponses.some(entry => entry.response.ok)), false,
-    'A planning acknowledgment must not report success before app acceptance.');
+  assert.equal(responses.length, 0, 'No spoken progress response is requested before app acceptance.');
+  assert.equal(messages.some(message => message.type === 'audio' || message.type === 'transcript'), false);
+  receive(Object.assign(new ProviderMessage(), { serverContent: { outputTranscription: { text: 'Still speculative' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } }));
   const action = messages.find(message => message.type === 'action')!;
   assert.ok(compileUpperBodySequence((action.action as { sequence: unknown }).sequence));
   socket.send(JSON.stringify({ type: 'applied', commandId: action.commandId, ok: true }));
-  await until(() => responses.length === 2);
-  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
+  await until(() => responses.length === 1);
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true, outputTranscription: { text: 'Watch the movement on screen.' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } }));
   await until(() => messages.some(message => message.type === 'turn_complete'));
-  assert.equal(responses[1].functionResponses[0].willContinue, false);
-  assert.equal(responses[1].functionResponses[0].response.ok, true);
+  assert.equal(messages.filter(message => message.type === 'audio').length, 1);
+  assert.equal(messages.filter(message => message.type === 'transcript').length, 1);
+  assert.equal(responses[0].functionResponses[0].willContinue, false);
+  assert.equal(responses[0].functionResponses[0].response.ok, true);
   const completedBeforeDuplicate = messages.filter(message => message.type === 'turn_complete').length;
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true },
     toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
-  await until(() => responses.length === 3);
+  await until(() => responses.length === 2);
   assert.equal(plans, 1); assert.equal(messages.filter(message => message.type === 'action').length, 1);
   assert.equal(messages.filter(message => message.type === 'turn_complete').length, completedBeforeDuplicate,
     'Cached tool responses still require a later provider output completion, not a synthetic finally event.');
@@ -95,7 +95,7 @@ test('live provider tool travels through the real planner validator and requires
       toolCall: { functionCalls: [{ id: `spoken-${field}`, name: 'request_movement', args: { request: 'Small wall angel' } }] } }));
     await until(() => messages.filter(message => message.type === 'action').length === beforeActions + 1);
     socket.send(JSON.stringify({ type: 'applied', commandId: messages.filter(message => message.type === 'action').at(-1)!.commandId, ok: true }));
-    await until(() => responses.length === beforeResponses + 2);
+    await until(() => responses.length === beforeResponses + 1);
     assert.equal(responses.at(-1)!.functionResponses[0].response.ok, true);
   }
   assert.equal(plans, 3);
