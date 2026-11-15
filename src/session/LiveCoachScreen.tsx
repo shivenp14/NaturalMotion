@@ -8,6 +8,7 @@ import { wallAngelDefaults } from '../anatomy/wallAngel';
 import { LiveClient } from '../live/LiveClient';
 import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
 import type { PlaybackState, PoseObservation } from '../shared/contracts';
+import { plannedAvatarView } from '../shared/presentation';
 import type { LiveAudio } from '../voice/LiveAudio.types';
 import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
 import { getCameraPermission, requestCameraPermission } from 'react-native-pose-detection';
@@ -137,10 +138,11 @@ export function LiveCoachScreen() {
           apply: (action: LiveAction) => {
             if (run !== epoch.current || !mounted.current) throw new Error('Session is cancelled.');
             if (action.type === 'play_sequence') {
-              const checked = latest.current.acceptSequence(action.sequence, action.assessmentPlan);
+              const checked = latest.current.acceptSequence(action.sequence, action.assessmentPlan, action.presentationPlan);
               if (!checked.ok) throw new Error(checked.error);
               practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); lastReport.current = '';
-            } else if (action.type === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
+            } else if (action.type === 'set_avatar_view') latest.current.setAvatarView(action.view);
+            else if (action.type === 'stop_movement') { latest.current.reset(); practiceSession.current.reset(); setPracticeView(practiceSession.current.snapshot); setReport(null); }
             else if (action.type === 'pause_movement') latest.current.setPaused(true);
             else if (action.type === 'resume_movement') latest.current.setPaused(false);
             else throw new Error('Unknown movement action.');
@@ -228,6 +230,8 @@ export function LiveCoachScreen() {
           <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
         </>}
         <AnatomyViewport sequence={practiceView.sequence ?? session.sequence} paused={session.paused}
+          viewPreference={session.avatarView} onViewPreferenceChange={session.setAvatarView}
+          automaticView={plannedAvatarView(session.presentationPlan, session.sequence, activePlayback?.stepIndex ?? 0)}
           onPlaybackChange={recordPlayback} showLab={false} compact />
         {session.assessmentPlan?.checks.length ? <Text testID={practiceView.startedAt === null ? 'live-practice-waiting' : 'live-practice-active'} style={styles.note}>{practiceView.startedAt === null ? 'After watching, hold the starting arm position to begin practice automatically.' : 'Follow the movement. The camera checks the selected arm positions while you practice.'}</Text> : null}
         <Text testID={`live-form-${report?.mode ?? 'none'}`} style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>

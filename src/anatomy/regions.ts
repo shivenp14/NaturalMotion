@@ -1,7 +1,8 @@
 import vocabulary from '../../assets/models/heatsy/muscles.json';
+import type { AvatarView } from '../shared/presentation';
 
 export type AnatomyFocus = 'none' | 'shoulders' | 'upper_back' | 'wall_angel';
-export type AnatomyView = 'front' | 'back' | 'side';
+export type AnatomyView = AvatarView;
 
 /** Only visible regions verified in this particular mesh are offered in the UI. */
 export const anatomyFocusOptions: { id: AnatomyFocus; label: string }[] = [
@@ -40,4 +41,5 @@ export const anatomyViewAngles: Record<AnatomyView, number> = {
   front: 0,
   back: Math.PI,
   side: Math.PI / 2,
+  left_side: -Math.PI / 2,
 };

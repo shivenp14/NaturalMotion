@@ -1,8 +1,10 @@
 import type { MovementSequence, PlaybackState } from '../shared/contracts';
 import type { AssessmentPlan } from '../shared/assessment';
+import type { AvatarViewPreference, PresentationPlan } from '../shared/presentation';
 
 export type LiveControl = 'pause_movement' | 'resume_movement' | 'stop_movement';
-export type LiveAction = { type: 'play_sequence'; sequence: MovementSequence; assessmentPlan?: AssessmentPlan | null } | { type: LiveControl };
+export type LiveAction = { type: 'play_sequence'; sequence: MovementSequence; assessmentPlan?: AssessmentPlan | null; presentationPlan?: PresentationPlan | null } |
+  { type: 'set_avatar_view'; view: AvatarViewPreference } | { type: LiveControl };
 export type FormReport = {
   sequenceId: string; stepIndex: number; observedAt: number;
   status: 'aligned' | 'needs_adjustment' | 'not_observable' | 'unavailable';

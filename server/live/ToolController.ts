@@ -2,10 +2,11 @@ import type { MovementSequence } from '../../src/shared/contracts';
 import type { AssessmentPlan } from '../../src/shared/assessment';
 import type { LiveAction } from '../../src/live/protocol';
 import { hasOnlyKeys, isRecord } from '../../src/shared/validation';
+import { avatarViewLabels, isAvatarViewPreference, type PresentationPlan } from '../../src/shared/presentation';
 
 export type ToolResult = { ok: boolean; message: string; sequenceId?: string };
 type ToolCall = { id?: string; name?: string; args?: unknown };
-export type MovementPlan = { sequence: MovementSequence | null; message: string; assessmentPlan?: AssessmentPlan | null };
+export type MovementPlan = { sequence: MovementSequence | null; message: string; assessmentPlan?: AssessmentPlan | null; presentationPlan?: PresentationPlan | null };
 type Options = {
   plan(utterance: string, interpretation: string, current: MovementSequence | null, signal: AbortSignal): Promise<MovementPlan>;
   apply(action: LiveAction, signal: AbortSignal): Promise<void>;
@@ -24,6 +25,7 @@ export class ToolController {
   private active: { id: string; abort: AbortController } | null = null;
   private calls = new Map<string, Promise<ToolResult>>();
   private requestsThisTurn = 0;
+  private usedView = false;
   private closed = false;
   private speechBoundaries = false;
   private inputWaiters = new Set<() => void>();
@@ -46,7 +48,7 @@ export class ToolController {
   private wakeInput() { for (const resolve of this.inputWaiters) resolve(); this.inputWaiters.clear(); }
   private beginTurn(preserveWaiting = false) {
     if (!preserveWaiting) this.cancel();
-    this.utterance = ''; this.usedPlan = false; this.requestsThisTurn = 0;
+    this.utterance = ''; this.usedPlan = false; this.usedView = false; this.requestsThisTurn = 0;
     this.awaitingInput = false; this.inputOpen = true;
   }
   noteTextInput(text: string) { this.beginTurn(); this.noteInput(text, true); }
@@ -90,8 +92,33 @@ export class ToolController {
     if (this.calls.size < 128) this.calls.set(call.id, result);
     return result;
   }
+  private async waitForInput(id: string): Promise<ToolResult | null> {
+    const waiting = { cancelled: false }; this.waiting.set(id, waiting);
+    const deadline = Date.now() + 1000;
+    try {
+      while (!this.closed && !waiting.cancelled && (this.inputOpen || !this.utterance.trim()) && Date.now() < deadline) {
+        await new Promise<void>(resolve => {
+          const done = () => { clearTimeout(timer); this.inputWaiters.delete(done); resolve(); };
+          const timer = setTimeout(done, Math.max(1, deadline - Date.now())); this.inputWaiters.add(done);
+        });
+      }
+      if (waiting.cancelled) return { ok: false, message: 'Request was cancelled before transcription completed.' };
+      if (this.closed) return { ok: false, message: 'Session is closed.' };
+      if (this.inputOpen || !this.utterance.trim()) return { ok: false, message: 'A complete user request was not received. Ask the user to repeat it.' };
+      return null;
+    } finally { this.waiting.delete(id); }
+  }
   private async run(call: ToolCall): Promise<ToolResult> {
     if (this.closed) return { ok: false, message: 'Session is closed.' };
+    if (call.name === 'set_avatar_view') {
+      if (!isRecord(call.args) || !hasOnlyKeys(call.args, ['view']) || !isAvatarViewPreference(call.args.view)) return { ok: false, message: 'Unsupported avatar view.' };
+      const inputError = this.inputOpen || !this.utterance.trim() ? await this.waitForInput(call.id!) : null;
+      if (inputError) return inputError;
+      if (this.usedView) return { ok: false, message: 'One view change per completed user request; wait for the user.' };
+      this.usedView = true;
+      await this.options.apply({ type: 'set_avatar_view', view: call.args.view }, new AbortController().signal);
+      return { ok: true, message: call.args.view === 'auto' ? 'Automatic avatar view restored.' : `Avatar is rotating to the ${avatarViewLabels[call.args.view].toLowerCase()} view. Movement continues unchanged.` };
+    }
     if (call.name === 'pause_movement' || call.name === 'resume_movement' || call.name === 'stop_movement') {
       if (call.args !== undefined && (!isRecord(call.args) || !hasOnlyKeys(call.args, []))) return { ok: false, message: 'Unexpected control arguments.' };
       return this.control(call.name);
@@ -103,18 +130,8 @@ export class ToolController {
     if (++this.requestsThisTurn > 3) return { ok: false, message: 'Tool request limit reached. Wait for the user; do not retry.' };
     // The provider documents transcription and function calls as independently ordered streams.
     // Briefly wait for actual user text instead of inventing an utterance from camera context.
-    const waiting = { cancelled: false }; this.waiting.set(call.id!, waiting);
-    const deadline = Date.now() + 1000;
-    try {
-      while (!this.closed && !waiting.cancelled && (this.inputOpen || !this.utterance.trim()) && Date.now() < deadline) {
-        await new Promise<void>(resolve => {
-          const done = () => { clearTimeout(timer); this.inputWaiters.delete(done); resolve(); };
-          const timer = setTimeout(done, Math.max(1, deadline - Date.now())); this.inputWaiters.add(done);
-        });
-      }
-      if (waiting.cancelled) return { ok: false, message: 'Request was cancelled before transcription completed.' };
-      if (this.inputOpen) return { ok: false, message: 'A complete user request was not received. Ask the user to repeat it.' };
-    } finally { this.waiting.delete(call.id!); }
+    const inputError = this.inputOpen || !this.utterance.trim() ? await this.waitForInput(call.id!) : null;
+    if (inputError) return inputError;
     if (this.closed) return { ok: false, message: 'Session is closed.' };
     if (!this.utterance.trim() || this.usedPlan || this.active) {
       return { ok: false, message: 'At most one movement plan per user turn. Wait for a new user request; do not retry.' };
@@ -129,7 +146,9 @@ export class ToolController {
       const plan = await this.options.plan(this.utterance, call.args.request, this.sequence, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Planning was cancelled.' };
       if (!plan.sequence) return { ok: false, message: plan.message || 'No supported demonstration was generated.' };
-      await this.options.apply({ type: 'play_sequence', sequence: plan.sequence, ...(plan.assessmentPlan ? { assessmentPlan: plan.assessmentPlan } : {}) }, abort.signal);
+      await this.options.apply({ type: 'play_sequence', sequence: plan.sequence,
+        ...(plan.assessmentPlan ? { assessmentPlan: plan.assessmentPlan } : {}),
+        ...(plan.presentationPlan ? { presentationPlan: plan.presentationPlan } : {}) }, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Application was cancelled.' };
       this.sequence = plan.sequence;
       this.assessment = plan.assessmentPlan ?? null;

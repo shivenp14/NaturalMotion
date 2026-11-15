@@ -35,6 +35,7 @@ Ordinary CI keeps running `npm run check` and `npm run export:android`; it does 
 | Check | Assertions |
 | --- | --- |
 | App launch | Selected development client launches; optional Metro cold-load landmark appears. |
+| Avatar view rotation | Front, back, left and right controls reach renderer-settled state; Auto returns control to presentation selection. Live playback also checks rotation while paused and a view-only provider request from a deliberately different angle. |
 | Local controls and cleanup | Local media starts; an authored validated reference reaches renderer playback; repeated End requests finish cleanup; camera view disappears; media can restart and stop. |
 | Live connection and playback | App connects to configured providers; a generated movement reaches the renderer; pause/resume states are reported; playback completes; the movement-matched assessment waits for readiness; Clear removes the sequence; End finishes cleanup. |
 | Automatic practice and form quality | Reported as unsupported by the unattended suite. Requires a person visibly holding the starting pose, following the replay and deliberately changing/correcting form. Synthetic regression coverage does not replace this. |
@@ -65,3 +66,5 @@ Android 17/API 37 emulator, combined development APK, actual configured provider
 The Samsung SM-S928U physical Android 17 phone also passed five checks, with pose arrival unsupported while no person was tracked. Startup fixes, earlier failures and remaining human acceptance are recorded in [PHYSICAL_PHONE_TEST_RESULTS.md](PHYSICAL_PHONE_TEST_RESULTS.md).
 
 The adaptive-form branch was tested only on that physical phone, using dedicated Metro port 8084: **5 pass, 0 fail, 2 unsupported**. It replaces the manual goalpost-button assertion with automatic-readiness waiting. Both human automatic practice/form quality and no-person landmark arrival remain unsupported in the unattended run. See [adaptive-form handoff](ADAPTIVE_FORM_COACHING.md) for current contracts, evidence and manual steps.
+
+The subsequent avatar-view update passed **6 checks, 0 failed, 2 unsupported** on the same physical phone. The added check covers front/back/left/right rotation and Auto. The live case also rotates while paused and requests a back view through the real provider from a deliberately selected front view. Local artifacts: `.expo/device-smoke/avatar-views-final/`; behavior and UI boundaries are in [AVATAR_VIEWS.md](AVATAR_VIEWS.md).

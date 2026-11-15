@@ -11,6 +11,7 @@ import { createWallAngelReference, compileUpperBodySequence } from '../src/anato
 import { wallAngelDefaults } from '../src/anatomy/wallAngel';
 import type { LiveAction } from '../src/live/protocol';
 import { validateAssessmentPlan } from '../src/vision/assessmentPlan';
+import { validatePresentationPlan } from '../src/shared/presentation';
 
 test('live provider tool travels through the real planner validator and requires app acknowledgment', async t => {
   const sequence = createWallAngelReference(wallAngelDefaults, 'live-wire');
@@ -28,7 +29,7 @@ test('live provider tool travels through the real planner validator and requires
       { type: 'output_text', text: JSON.stringify({ steps: sequence.steps.map(step => {
         assert.ok('parallel' in step);
         return { targets: step.parallel.map(command => ({ componentId: command.componentId, toDeg: command.parameters.toDeg })),
-          durationSeconds: step.durationSeconds, holdSeconds: step.holdSeconds };
+          durationSeconds: step.durationSeconds, holdSeconds: step.holdSeconds, view: 'back' };
       }), assessment: [{ stepIndex: 1, side: 'left', metric: 'forearm_direction', toleranceDeg: 20 }], message: '' }) },
     ] }] }); },
     connectConversation: async (callbacks: { message(message: ProviderMessage): void }) => {
@@ -72,6 +73,7 @@ test('live provider tool travels through the real planner validator and requires
   assert.ok(compileUpperBodySequence((action.action as { sequence: unknown }).sequence));
   const movement = action.action as Extract<LiveAction, { type: 'play_sequence' }>;
   assert.equal(validateAssessmentPlan(movement.assessmentPlan, movement.sequence)?.checks.length, 1);
+  assert.equal(validatePresentationPlan(movement.presentationPlan, movement.sequence)?.steps[0].view, 'back');
   socket.send(JSON.stringify({ type: 'applied', commandId: action.commandId, ok: true }));
   await until(() => responses.length === 1);
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true, outputTranscription: { text: 'Watch the movement on screen.' }, modelTurn: { parts: [{ inlineData: { data: 'AAAA', mimeType: 'audio/pcm;rate=24000' } }] } } }));

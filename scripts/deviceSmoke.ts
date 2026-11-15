@@ -70,6 +70,8 @@ async function main() {
       if (metro) await invoke(['wait', 'id="session-screen"', '30000', '--json'], 'bundle-ready', 40000);
     });
     if (deviceFailed) return;
+    await run('avatar_view_rotation', () => replay('avatar-views.ad'));
+    if (deviceFailed) return;
     await run('local_controls_cleanup', () => replay('local-controls.ad'));
     if (deviceFailed) return;
     if (args.includes('--local-only')) add({ name: 'live_connection_playback', required: false, status: 'unsupported', reason: 'Explicit local-only run; no provider request made.' });

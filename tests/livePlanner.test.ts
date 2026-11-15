@@ -4,7 +4,7 @@ import { planMovement } from '../server/live/planner';
 import { anatomyAgentCapabilities } from '../src/anatomy/agentCapabilities';
 import { compileUpperBodySequence } from '../src/anatomy/upperBodySequence';
 
-const group = (elevation: number, flexion: number) => ({ durationSeconds: 3, holdSeconds: 0,
+const group = (elevation: number, flexion: number) => ({ durationSeconds: 3, holdSeconds: 0, view: 'back',
   targets: (['left', 'right'] as const).flatMap(side => [
     { componentId: `${side}_shoulder_elevation`, toDeg: elevation },
     { componentId: `${side}_elbow_flexion`, toDeg: flexion },
@@ -33,6 +33,7 @@ test('compact planner derives continuous starts and retains omitted channels', a
   assert.equal(result.assessmentPlan?.sequenceId, result.sequence.id);
   assert.equal(result.assessmentPlan?.checks.length, 2);
   assert.ok(Number.isFinite(result.assessmentPlan?.checks[0].targetDeg));
+  assert.deepEqual(result.presentationPlan?.steps, [{ stepIndex: 0, view: 'back' }, { stepIndex: 1, view: 'back' }]);
 });
 
 test('compact planner still rejects cross-joint violations, conflicting channels and invented values', async () => {
@@ -40,7 +41,8 @@ test('compact planner still rejects cross-joint violations, conflicting channels
   const invented = structuredClone(valid); invented.steps[0].targets[0].componentId = 'invented';
   const injected = structuredClone(valid); Object.assign(injected.steps[0].targets[0], { fromDeg: 0 });
   const fast = structuredClone(valid); fast.steps[0].durationSeconds = 1;
-  for (const invalid of [duplicate, invented, injected, fast, { steps: [group(150, 90)], message: '' },
+  const badView = structuredClone(valid); badView.steps[0].view = 'overhead';
+  for (const invalid of [duplicate, invented, injected, fast, badView, { steps: [group(150, 90)], message: '' },
     { steps: [group(200, 20)], message: '' }, { ...valid, actions: [{ type: 'stop_movement' }] }]) await assert.rejects(run(invalid));
 });
 

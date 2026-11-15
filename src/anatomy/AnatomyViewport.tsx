@@ -7,6 +7,8 @@ import { anatomyFocusOptions, type AnatomyFocus, type AnatomyView } from './regi
 import { SceneCanvas } from './SceneCanvas';
 import { wallAngelDefaults, type WallAngelPreview } from './wallAngel';
 import { compileUpperBodySequence, createWallAngelReference } from './upperBodySequence';
+import { avatarViewLabels, type AvatarViewPreference } from '../shared/presentation';
+import { recommendedAvatarView } from './viewSelection';
 
 export type AnatomyViewportProps = {
   sequence: MovementSequence | null;
@@ -14,6 +16,9 @@ export type AnatomyViewportProps = {
   paused?: boolean;
   showLab?: boolean;
   compact?: boolean;
+  automaticView?: AnatomyView;
+  viewPreference?: AvatarViewPreference;
+  onViewPreferenceChange?: (view: AvatarViewPreference) => void;
 };
 
 class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
@@ -29,9 +34,11 @@ class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   }
 }
 
-export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false }: AnatomyViewportProps) {
+export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false, automaticView, viewPreference, onViewPreferenceChange }: AnatomyViewportProps) {
   const [focus, setFocus] = useState<AnatomyFocus>('none');
-  const [view, setView] = useState<AnatomyView>('front');
+  const [localView, setLocalView] = useState<AvatarViewPreference>('auto');
+  const [viewTransition, setViewTransition] = useState({ view: 'front' as AnatomyView, settled: true });
+  const [activeStep, setActiveStep] = useState({ sequenceId: '', index: 0 });
   const [ready, setReady] = useState(false);
   const [preview, setPreview] = useState<WallAngelPreview>({ mode: 'rest', parameters: { ...wallAngelDefaults } });
   const [labSequence, setLabSequence] = useState<MovementSequence | null>(null);
@@ -42,9 +49,19 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
     try { return { program: compileUpperBodySequence(input), error: null }; }
     catch (error) { return { program: null, error: error instanceof Error ? error.message : 'Unsupported movement sequence.' }; }
   }, [sequence, labSequence]);
+  const preference = viewPreference ?? localView;
+  const index = activeStep.sequenceId === execution.program?.id ? activeStep.index : 0;
+  const view = preference === 'auto' ? automaticView ?? recommendedAvatarView(execution.program?.segments[index], focus) : preference;
+  function selectView(value: AvatarViewPreference) {
+    if (onViewPreferenceChange) onViewPreferenceChange(value); else setLocalView(value);
+  }
+  const onViewTransition = useCallback((next: AnatomyView, settled: boolean) => {
+    setViewTransition(previous => previous.view === next && previous.settled === settled ? previous : { view: next, settled });
+  }, []);
   const onReady = useCallback(() => setReady(true), []);
   const onPreviewComplete = useCallback(() => setPreview((current) => ({ ...current, mode: 'completed' })), []);
   const onProgramPlayback = useCallback((state: PlaybackState) => {
+    setActiveStep(previous => previous.sequenceId === state.sequenceId && previous.index === state.stepIndex ? previous : { sequenceId: state.sequenceId, index: state.stepIndex });
     if (!sequence && state.status === 'completed') setPreview((current) => ({ ...current, mode: 'completed' }));
     onPlaybackChange?.(state);
   }, [sequence, onPlaybackChange]);
@@ -98,7 +115,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
       <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
         <ModelBoundary>
           <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
-            program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} fixedFraming={!showLab} />
+            program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} fixedFraming={!showLab} onViewTransition={onViewTransition} />
           {!ready && (
             <View style={styles.loading} pointerEvents="none">
               <ActivityIndicator color={theme.accent} />
@@ -108,19 +125,20 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
         </ModelBoundary>
       </View>
       <View style={styles.controls}>
-        <View style={styles.row} accessibilityLabel="Body view">
-          {(['front', 'back', 'side'] as const).map((option) => (
-            <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: view === option }}
-              onPress={() => setView(option)} style={[styles.control, view === option && styles.selected]}>
-              <Text style={[styles.controlText, view === option && styles.selectedText]}>{option[0].toUpperCase() + option.slice(1)}</Text>
+        <View style={styles.row} accessibilityLabel="Body view" testID={`anatomy-view-${view}-${viewTransition.view === view && viewTransition.settled ? 'settled' : 'rotating'}`}>
+          {(['auto', 'front', 'back', 'left_side', 'side'] as const).map((option) => (
+            <Pressable key={option} testID={`anatomy-view-${option}`} accessibilityRole="button" accessibilityState={{ selected: preference === option }}
+              onPress={() => selectView(option)} style={[styles.control, preference === option && styles.selected]}>
+              <Text style={[styles.controlText, preference === option && styles.selectedText]}>{avatarViewLabels[option]}</Text>
             </Pressable>
           ))}
         </View>
+        <Text style={styles.caption}>{preference === 'auto' ? 'Auto · ' : ''}{avatarViewLabels[view]} view</Text>
         <Text style={styles.label}>{execution.program ? 'Regions follow the active components' : 'Region focus'}</Text>
         {!execution.program && <View style={styles.row}>
           {[...anatomyFocusOptions, ...(__DEV__ ? [{ id: 'wall_angel' as const, label: 'Movement regions' }] : [])].map((option) => (
             <Pressable key={option.id} accessibilityRole="button" accessibilityState={{ selected: focus === option.id }}
-              onPress={() => { setFocus(option.id); if (option.id === 'upper_back') setView('back'); }}
+              onPress={() => setFocus(option.id)}
               style={[styles.control, focus === option.id && styles.selected]}>
               <Text style={[styles.controlText, focus === option.id && styles.selectedText]}>{option.label}</Text>
             </Pressable>

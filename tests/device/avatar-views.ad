@@ -1,0 +1,19 @@
+context platform=android
+open "${APP_ID}" "${LIVE_URL}"
+wait 'id="live-stopped"' 15000
+scroll down --until 'id="anatomy-view-back"'
+press 'id="anatomy-view-back"'
+wait 'id="anatomy-view-back-settled"' 5000
+scroll down --until 'id="anatomy-view-side"'
+press 'id="anatomy-view-side"'
+wait 'id="anatomy-view-side-settled"' 5000
+scroll down --until 'id="anatomy-view-left_side"'
+press 'id="anatomy-view-left_side"'
+wait 'id="anatomy-view-left_side-settled"' 5000
+scroll up --until 'id="anatomy-view-front"'
+press 'id="anatomy-view-front"'
+wait 'id="anatomy-view-front-settled"' 5000
+scroll up --until 'id="anatomy-view-auto"'
+press 'id="anatomy-view-auto"'
+wait 'id="anatomy-view-front-settled"' 5000
+wait 'id="live-stopped"' 5000

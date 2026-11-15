@@ -1,6 +1,6 @@
 # Movement-matched assessment and automatic practice
 
-This branch replaces the live screen's fixed final-goalpost button with planner-selected geometric checks and automatic practice entry. Final UI design remains with Roland. Shoulder/armpit deformation remains optional issue #11.
+This branch replaces the live screen's fixed final-goalpost button with planner-selected geometric checks and automatic practice entry. [Automatic avatar views and smooth rotation](AVATAR_VIEWS.md) add presentation choices without changing assessment geometry. Final UI design remains with Roland. Shoulder/armpit deformation remains optional issue #11.
 
 ## Runtime boundary
 
@@ -32,7 +32,7 @@ These are model-estimated geometric similarities to an educational animation. Th
 
 ## Verification and human acceptance
 
-All 148 tests, lint and both typechecks pass. Automated checks cover independent Three quaternion target math, inverted forearms despite matching elbow height/bend, visibility and freshness loss, coordinate convention, forged plans, moving targets, progress/pause synchronization, readiness, replay ownership, feedback timing and the live protocol. Android export passes. Synthetic geometry tests are explicitly separate from phone evidence.
+All 155 tests, lint and both typechecks pass, including the subsequent avatar-view coverage. Automated checks cover independent Three quaternion target math, inverted forearms despite matching elbow height/bend, visibility and freshness loss, coordinate convention, forged plans, moving targets, progress/pause synchronization, readiness, replay ownership, feedback timing and the live protocol. Android export passes. Synthetic geometry tests are explicitly separate from phone evidence.
 
 On November 15, the Samsung SM-S928U / Android 17 automated suite passed **5 checks, 0 failed, 2 unsupported**: launch; local controls/cleanup; actual-provider live generation/playback/pause/resume/clear; diagnostic image arrival/restart; final cleanup. Human practice/form quality and native landmark arrival were unsupported while no person was tracked. Local artifacts: `.expo/device-smoke/adaptive-form/`. No simulator was used for this work. A host live-provider request, **“Show me how to do a wall angel.”**, returned two validated movement groups and 12 validated assessment selections, followed by audio output. This does not prove physical microphone or audible-feedback quality.
 

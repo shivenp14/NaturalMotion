@@ -2,12 +2,13 @@
 /* eslint-disable react/no-unknown-property */
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
-import { DoubleSide } from 'three';
+import { DoubleSide, type Group } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { anatomyAppearance } from './appearance';
 import { bodyAssetUri } from './modelAsset';
 import { prepareAnatomyModel } from './prepareModel';
-import { anatomyViewAngles, type AnatomyFocus, type AnatomyView } from './regions';
+import { type AnatomyFocus, type AnatomyView } from './regions';
+import { ViewRotation } from './viewRotation';
 import { createWallAngelRig, sampleWallAngelCycle, type WallAngelPreview } from './wallAngel';
 import type { PlaybackState } from '../shared/contracts';
 import { createPlaybackReporter, sampleUpperBodyProgram, type UpperBodyProgram } from './upperBodySequence';
@@ -22,14 +23,22 @@ export type AnatomySceneProps = {
   playbackPaused?: boolean;
   onPlaybackChange?: (state: PlaybackState) => void;
   fixedFraming?: boolean;
+  onViewTransition?: (view: AnatomyView, settled: boolean) => void;
 };
 
-export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange, fixedFraming = false }: AnatomySceneProps) {
+export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange, fixedFraming = false, onViewTransition }: AnatomySceneProps) {
   const gltf = useLoader(GLTFLoader, bodyAssetUri);
   const model = useMemo(() => prepareAnatomyModel(gltf.scene), [gltf.scene]);
   const rig = useMemo(() => createWallAngelRig(model.scene), [model]);
   const invalidate = useThree((state) => state.invalidate);
   const camera = useThree((state) => state.camera);
+  const bodyGroup = useRef<Group>(null);
+  const viewRotation = useRef(new ViewRotation());
+  useLayoutEffect(() => {
+    viewRotation.current.setView(view);
+    onViewTransition?.(view, !viewRotation.current.active);
+    invalidate();
+  }, [view, onViewTransition, invalidate]);
   const elapsed = useRef(0);
   const previousMode = useRef<WallAngelPreview['mode']>('rest');
   const firstFrame = useRef(true);
@@ -84,6 +93,10 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
     invalidate();
   }, [rig, preview, program, invalidate]);
   useFrame((_, delta) => {
+    const rotating = viewRotation.current.active;
+    if (bodyGroup.current) bodyGroup.current.rotation.y = viewRotation.current.advance(delta);
+    if (viewRotation.current.active) invalidate();
+    else if (rotating) onViewTransition?.(view, true);
     if (program && report.current) {
       if (playbackPaused || programDone.current) return;
       if (firstFrame.current) firstFrame.current = false;
@@ -134,7 +147,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
       <directionalLight position={[-2, 3, 4]} intensity={2.4} color="#ffffff" />
       <directionalLight position={[2, 1.5, 3]} intensity={0.65} color="#ffffff" />
       <directionalLight position={[1, 2, -3]} intensity={1.8} color="#ffffff" />
-      <group rotation={[0, anatomyViewAngles[view], 0]}>
+      <group ref={bodyGroup}>
         {movementVisible && (
           <mesh position={[0, 1, -0.16]}>
             <planeGeometry args={[1.55, 2.1]} />
