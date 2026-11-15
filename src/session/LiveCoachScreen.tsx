@@ -16,6 +16,7 @@ import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/l
 import { deriveFormPlan, SequenceFormEvaluator } from '../vision/checks/registry';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
+import { appendCleanup } from './cleanup';
 
 export function LiveCoachScreen() {
   const session = useSession();
@@ -48,18 +49,17 @@ export function LiveCoachScreen() {
   const [text, setText] = useState('Show me a wall angel demonstration, then return to a goalpost position.');
   const backendUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-  const stop = useCallback(async () => {
-    ++epoch.current;
+  const stop = useCallback(async (reason = 'Session stopped. Camera and microphone released.') => {
+    const run = ++epoch.current;
     healthRequest.current?.abort(); healthRequest.current = null;
     client.current?.stop(); client.current = null;
     const previous = audio.current; audio.current = null;
     observation.current = null; poseClock.current = null; evaluator.current.reset(); lastReport.current = '';
     latest.current.reset(); practice.current = null;
     if (mounted.current) { setPending(true); setMode(null); setPlanning(false); setReport(null); setPracticeStartedAt(null); }
-    const cleanup = (async () => { try { await previous?.stop(); } catch { /* The session is already cancelled. */ } })();
-    stopping.current = cleanup;
-    await cleanup;
-    if (mounted.current) { setPending(false); setMessage('Session stopped. Camera and microphone released.'); }
+    stopping.current = appendCleanup(stopping.current, previous ? () => previous.stop() : undefined);
+    await stopping.current;
+    if (mounted.current && run === epoch.current) { setPending(false); setMessage(reason); }
   }, []);
 
   useFocusEffect(useCallback(() => () => { void stop(); }, [stop]));
@@ -147,7 +147,7 @@ export function LiveCoachScreen() {
                 [...previous, { role: event.role, text: event.text }].slice(-20);
             });
           },
-          onClose: reason => { if (run === epoch.current && mounted.current) void stop().then(() => { if (mounted.current) setMessage(reason); }); },
+          onClose: reason => { if (run === epoch.current && mounted.current) void stop(reason); },
         });
         client.current = connection;
         await connection.start();
@@ -158,12 +158,12 @@ export function LiveCoachScreen() {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
         client.current?.send({ type: 'audio', data });
-      }, error => { if (run === epoch.current) void stop().then(() => { if (mounted.current) setMessage(error); }); });
+      }, error => { if (run === epoch.current) void stop(error); });
       if (run === epoch.current && mounted.current) setMessage(nextMode === 'local'
         ? 'Local devices test. Audio and images stay on this phone. The speaker button plays a test tone.'
         : 'Live camera and microphone connected. Ask for a demonstration.');
     } catch (error) {
-      if (run === epoch.current) { await stop(); if (mounted.current) setMessage(error instanceof Error ? error.message : 'Could not start the live coach.'); }
+      if (run === epoch.current) await stop(error instanceof Error ? error.message : 'Could not start the live coach.');
     } finally { if (run === epoch.current && mounted.current) setPending(false); }
   }
 
@@ -201,7 +201,7 @@ export function LiveCoachScreen() {
               if (Date.now() - image.observedAt < 2000) client.current?.send({ type: 'image', data: image.data, observedAt: image.observedAt });
             }} onError={(error, fatal) => {
               if (!fatal) { setCameraWarning(error); return; }
-              void stop().then(() => { if (mounted.current) setMessage(error); });
+              void stop(error);
             }} />
           </View>
           {!!cameraWarning && <Text style={styles.note}>{cameraWarning}</Text>}
@@ -220,7 +220,7 @@ export function LiveCoachScreen() {
         </>}
         {mode === 'live' && <View style={styles.panel}>
           <TextInput accessibilityLabel="Live text request" style={styles.input} multiline value={text} onChangeText={setText} />
-          <Pressable accessibilityRole="button" onPress={() => { if (text.trim()) client.current?.send({ type: 'text', text }); }} style={styles.button}><Text style={styles.buttonText}>Send text to live coach</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => { if (!pending && text.trim()) client.current?.send({ type: 'text', text }); }} style={styles.button}><Text style={styles.buttonText}>Send text to live coach</Text></Pressable>
         </View>}
         {mode === 'local' && <View style={styles.row}>
           <Pressable accessibilityRole="button" onPress={() => audio.current?.testSpeaker()} style={styles.button}><Text style={styles.buttonText}>Test speaker tone</Text></Pressable>

@@ -17,13 +17,13 @@ The live coach stops media on route blur. The diagnostic camera is active only w
 
 ## Merge preparation verification
 
-- `npm run check`: lint, both TypeScript checks and all 111 tests pass.
+- `npm run check`: lint, both TypeScript checks and all 114 tests pass.
 - `npm run export:android`: passes with the diagnostic route included.
 - The installed native pose patch passes its version/hash verification unchanged.
 - Android 17 emulator: diagnostic feed opens, Restart camera works, live local media counters advance, navigating to diagnostics releases live media, and system Back returns to the stopped live screen. The virtual feed contains no person, so it cannot validate human pose accuracy.
 - Real-provider smoke tests pass for a compiler-valid two-group movement and an explanation-only request with no movement. Test completion now waits until pending planning has finished.
 
-Outstanding PR review findings were checked against the current code. Fixes cover waiting-tool cancellation, final transcript qualifiers, flushing startup playback context, minimum demonstration holds, HTTP body deadlines, supported HTTP payload fields, terminal action ordering, legacy voice shutdown/restart and preflight control capabilities. Model overrides may omit the reasoning parameter; the default GPT-6 Luna setting remains low. Budget exhaustion is identified explicitly and reasoning-enabled legacy responses have a larger output allowance. Historical latency evidence remains a small typed-input sample; physical-phone acceptance is still separate.
+Outstanding PR review findings were checked against the current code. Fixes cover waiting-tool cancellation, final transcript qualifiers, flushing startup playback context, minimum demonstration holds, HTTP body deadlines, supported HTTP payload fields, terminal action ordering, legacy voice shutdown/restart and preflight control capabilities. Repeated live shutdowns retain the same native cleanup barrier; startup text submission is disabled; provider completion events are suppressed while tool calls are pending, including calls in the same provider message. Model overrides may omit the reasoning parameter; the default GPT-6 Luna setting remains low. Budget exhaustion is identified explicitly and reasoning-enabled legacy responses have a larger output allowance. Historical latency evidence remains a small typed-input sample; physical-phone acceptance is still separate.
 
 Neither PR #14 nor PR #15 was merged into main by this work. The current branch includes #14's head as an ancestor and is based on the latest fetched main. Shiven should review PR #15's current checks and merge it manually when ready.
 

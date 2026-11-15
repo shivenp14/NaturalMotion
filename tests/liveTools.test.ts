@@ -106,3 +106,14 @@ test('movement planning waits for a trailing transcript qualifier', async () => 
   assert.equal((await pending).ok, true);
   assert.equal(received, 'Show a wall angel, but keep the range small.'); controller.close();
 });
+
+test('a replacement typed turn cannot wake an older waiting tool into a new plan', async () => {
+  const utterances: string[] = [];
+  const controller = new ToolController({ plan: async text => { utterances.push(text); return { sequence, message: '' }; },
+    apply: async () => {}, onPlanning: () => {} });
+  const old = controller.handle(call('old'));
+  controller.noteTextInput('Show the new request.');
+  assert.equal((await old).ok, false); assert.deepEqual(utterances, []);
+  assert.equal((await controller.handle(call('new'))).ok, true);
+  assert.deepEqual(utterances, ['Show the new request.']); controller.close();
+});

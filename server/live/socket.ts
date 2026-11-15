@@ -38,6 +38,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
     let initialized = false;
     let messageWindow = Date.now();
     let messageCount = 0;
+    let pendingTools = 0;
     const pending = new Map<string, { finish(ok: boolean): void }>();
     const send = (message: LiveServerMessage) => {
       if (closed || client.readyState !== WebSocket.OPEN) return;
@@ -97,14 +98,17 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             send({ type: 'audio', data: part.inlineData.data });
           }
         }
-        if (content?.turnComplete) { tools.finishTurn(); send({ type: 'turn_complete' }); }
         for (const id of message.toolCallCancellation?.ids ?? []) tools.cancel(id);
         for (const call of message.toolCall?.functionCalls ?? []) {
+          pendingTools++;
           void tools.handle(call).then(result => {
             if (!closed) provider?.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: result,
               ...(call.name === 'request_movement' ? { willContinue: false, scheduling: FunctionResponseScheduling.WHEN_IDLE } : {}) }] });
-          }).catch(() => close('The conversation tool connection failed.'));
+          }).catch(() => close('The conversation tool connection failed.')).finally(() => { pendingTools--; });
         }
+        // A provider message can contain both completion and tool calls. An
+        // acknowledgment turn while a tool is pending is not request completion.
+        if (content?.turnComplete) { tools.finishTurn(); if (pendingTools === 0) send({ type: 'turn_complete' }); }
       } catch { close('The conversation response could not be processed.'); }
     }
 

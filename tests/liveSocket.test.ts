@@ -56,6 +56,7 @@ test('live provider tool travels through the real planner validator and requires
   await until(() => media.length > 0);
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true }, toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
   await until(() => messages.some(message => message.type === 'action'));
+  assert.equal(messages.some(message => message.type === 'turn_complete'), false, 'A provider completion bundled with a tool call cannot end the request early.');
   assert.equal(responses.length, 1);
   assert.equal(responses[0].functionResponses[0].willContinue, true);
   assert.equal(responses[0].functionResponses[0].response.status, 'planning');
@@ -65,6 +66,8 @@ test('live provider tool travels through the real planner validator and requires
   assert.ok(compileUpperBodySequence((action.action as { sequence: unknown }).sequence));
   socket.send(JSON.stringify({ type: 'applied', commandId: action.commandId, ok: true }));
   await until(() => responses.length === 2);
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
+  await until(() => messages.some(message => message.type === 'turn_complete'));
   assert.equal(responses[1].functionResponses[0].willContinue, false);
   assert.equal(responses[1].functionResponses[0].response.ok, true);
   receive(Object.assign(new ProviderMessage(), { toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
