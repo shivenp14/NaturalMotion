@@ -37,11 +37,12 @@ native converter or bundled model. Build with `npx eas-cli@latest build --platfo
 
 ## Verification
 
-Lint, both TypeScript checks, 24 protocol/vision tests and Android JavaScript export passed.
-Android prebuild downloaded and bundled the Full model successfully. The new tests cover immediate
-visibility loss, recovery, and expiry when native callbacks cease. The patched Android pose module
-also passed `:react-native-pose-detection:compileDebugKotlin` with SDK 37 / Java 21. No complete
-APK or physical-phone tracking test was performed; compilation does not establish tracking quality.
+Lint, both TypeScript checks, the full test suite (`npm run check`) and the Android JavaScript
+export pass. Android prebuild downloaded and bundled the Full model successfully. The new tests
+cover immediate visibility loss, recovery, and expiry when native callbacks cease. The patched
+Android pose module also passed `:react-native-pose-detection:compileDebugKotlin` with SDK 37 /
+Java 21. A development APK was built, installed and exercised on the phone, which confirms the
+upright-frame patch empirically; the numbers below remain the measurement to record.
 
 On the actual phone, record cold acquisition time and tracking gaps across three repeated runs:
 
