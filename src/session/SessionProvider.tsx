@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, type PropsWithChildren } from 'react';
-import type { MovementSequence, SessionPhase } from '../shared/contracts';
+import type { ComponentDefinition, MovementSequence, SessionPhase } from '../shared/contracts';
 import { componentCatalog } from '../shared/catalog';
-import { validateSequence, type SequenceValidation } from '../shared/validateSequence';
+import { validateSequence, type CompositionPolicy, type SequenceValidation } from '../shared/validateSequence';
 
 type SessionContextValue = {
+  catalog: readonly ComponentDefinition[];
+  compositionPolicy?: CompositionPolicy;
   phase: SessionPhase;
   sequence: MovementSequence | null;
   setPhase: (phase: SessionPhase) => void;
@@ -13,11 +15,14 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-export function SessionProvider({ children }: PropsWithChildren) {
+export function SessionProvider({ children, catalog = componentCatalog, compositionPolicy }: PropsWithChildren<{
+  catalog?: readonly ComponentDefinition[];
+  compositionPolicy?: CompositionPolicy;
+}>) {
   const [phase, setPhase] = useState<SessionPhase>('idle');
   const [sequence, setSequence] = useState<MovementSequence | null>(null);
   function acceptSequence(input: unknown) {
-    const result = validateSequence(input, componentCatalog);
+    const result = validateSequence(input, catalog, compositionPolicy);
     if (result.ok) {
       setSequence(result.sequence);
       setPhase('demonstrating');
@@ -29,7 +34,7 @@ export function SessionProvider({ children }: PropsWithChildren) {
     setPhase('idle');
   }
   return (
-    <SessionContext.Provider value={{ phase, sequence, setPhase, acceptSequence, reset }}>
+    <SessionContext.Provider value={{ catalog, compositionPolicy, phase, sequence, setPhase, acceptSequence, reset }}>
       {children}
     </SessionContext.Provider>
   );

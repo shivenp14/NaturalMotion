@@ -1,12 +1,12 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnatomyViewport } from '../anatomy/AnatomyViewport';
-import { componentCatalog } from '../shared/catalog';
 import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
+import { VoiceDevPanel } from '../voice/VoiceDevPanel';
 
 export function SessionScreen() {
-  const { phase, sequence } = useSession();
+  const { phase, sequence, catalog } = useSession();
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -30,8 +30,9 @@ export function SessionScreen() {
         {__DEV__ && (
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
-            <Text style={styles.devText}>Session: {phase} · Registered components: {componentCatalog.length}</Text>
-            <Text style={styles.devText}>Anatomy, camera, and voice adapters are not connected.</Text>
+            <Text style={styles.devText}>Session: {phase} · Registered components: {catalog.length}</Text>
+            <Text style={styles.devText}>Anatomy, camera, and agent services are not connected.</Text>
+            <VoiceDevPanel />
           </View>
         )}
       </ScrollView>

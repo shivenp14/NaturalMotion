@@ -13,12 +13,24 @@ export type ComponentDefinition = {
   cameraView: string;
   requiredLandmarks: readonly string[];
   supportedCheckIds: readonly string[];
+  /** Renderer channels this component writes; required for parallel use. */
+  controlledChannels?: readonly string[];
 };
 
-export type MovementStep = {
+export type MovementCommand = {
   componentId: string;
   parameters: Record<string, number>;
 };
+
+/** Commands start together and reach their endpoints over the same duration. */
+export type ParallelMovementStep = {
+  parallel: MovementCommand[];
+  durationSeconds: number;
+  holdSeconds: number;
+};
+
+/** Legacy single-component steps remain supported during integration. */
+export type MovementStep = MovementCommand | ParallelMovementStep;
 
 export type MovementSequence = { id: string; steps: MovementStep[] };
 

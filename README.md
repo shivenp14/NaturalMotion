@@ -8,9 +8,10 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 - A native landing/session shell and a clearly labeled empty anatomy viewport.
 - Shared movement, playback, pose, and form-feedback contracts.
 - Runtime sequence validation and feedback freshness helpers with protocol tests.
+- Native recognition/TTS adapters, validated half-duplex turn coordination, and a development echo test.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The movement catalog is intentionally empty.** No clinical movement, anatomy asset, pose engine, microphone capture, or agent provider is implemented yet. The session button stays disabled until those integrations exist. Select the movement family together, then build against the interfaces below.
+**The movement catalog is intentionally empty.** No clinical movement, anatomy asset, or pose engine is implemented yet. A local OpenAI backend and HTTP agent adapter are implemented; live provider access remains unverified. A native voice adapter and development-only echo panel are implemented; audio capture has been confirmed by the user; the full agent loop remains unverified. The session button stays disabled until those integrations exist. Select the movement family together, then build against the interfaces below.
 
 ## Quick start
 
@@ -83,6 +84,9 @@ Person 1 coordinates dependency/config/lockfile edits. Person 3 coordinates shar
 - `src/anatomy/AnatomyViewport.tsx`: replace the placeholder using its sequence input and playback callback.
 - `src/vision/types.ts`: camera adapter and form-evaluator boundaries.
 - `src/agent/types.ts` / `src/voice/types.ts`: service and audio adapter boundaries.
+- `src/agent/validateAgentReturn.ts`: validate complete action batches before dispatch.
+- `src/agent/decide.ts`: deterministic, visibility-aware feedback cue selection.
+- [Agent contract alignment](docs/WORKER3_CONTRACTS.md): Shiven’s canonical sequence format, simultaneous commands, and trusted composition-policy wiring.
 
 The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a supported exercise and is not registered in the application catalog.
 
@@ -94,13 +98,13 @@ The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a sup
 4. Register that component, implement the renderer and evaluator, then give the catalog to the agent.
 5. Connect voice, playback, and real observations on the Android phone before expanding coverage.
 
-Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics, camera, and voice packages are intentionally deferred until their actual integration paths are selected.
+Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and camera packages remain deferred. Native voice packages are installed; rebuild the development client and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md) to verify device audio.
 
 ## Configuration and secrets
 
-Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. Person 3 should choose and implement the backend/provider integration separately.
+Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. The local backend uses OpenAI with server-only credentials; see the agent setup below.
 
-When connecting a physical phone to a laptop service, use a reachable LAN address or HTTPS endpoint. `localhost` on the phone refers to the phone itself. No backend service is included or started by this scaffold.
+When connecting a physical phone to a laptop service, use a reachable LAN address or HTTPS endpoint. `localhost` on the phone refers to the phone itself. Run `npm run server` for the local agent backend; see [agent setup](docs/AGENT_BACKEND_HANDOFF.md).
 
 ## Checks
 

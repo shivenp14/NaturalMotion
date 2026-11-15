@@ -8,6 +8,8 @@
     "expo-dev-client": "~58.0.20",
     "expo-linking": "~58.0.17",
     "expo-router": "~58.0.31",
+    "expo-speech": "~58.0.4",
+    "expo-speech-recognition": "^58.0.1",
     "expo-status-bar": "~58.0.5",
     "react": "19.3.0",
     "react-dom": "19.3.0",
@@ -34,7 +36,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tests.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run lint && npm run typecheck && npm test",
-    "export:android": "expo export --platform android"
+    "export:android": "expo export --platform android",
+    "server": "node --env-file-if-exists=server/.env --import tsx server/index.ts"
   },
   "private": true
 }
