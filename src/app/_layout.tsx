@@ -7,7 +7,7 @@ import { anatomyAgentCapabilities } from '../anatomy/agentCapabilities';
 export default function RootLayout() {
   return (
     <SessionProvider catalog={anatomyAgentCapabilities.catalog} compositionPolicy={anatomyAgentCapabilities.compositionPolicy}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.background } }} />
     </SessionProvider>
   );

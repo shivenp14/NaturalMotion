@@ -138,7 +138,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
         {movementVisible && (
           <mesh position={[0, 1, -0.16]}>
             <planeGeometry args={[1.55, 2.1]} />
-            <meshBasicMaterial color="#52616a" side={DoubleSide} transparent opacity={0.12} depthWrite={false} />
+            <meshBasicMaterial color="#606060" side={DoubleSide} transparent opacity={0.12} depthWrite={false} />
           </mesh>
         )}
         <primitive object={model.scene} dispose={null} />

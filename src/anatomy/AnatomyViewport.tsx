@@ -14,6 +14,7 @@ export type AnatomyViewportProps = {
   paused?: boolean;
   showLab?: boolean;
   compact?: boolean;
+  stage?: boolean;
 };
 
 class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
@@ -29,7 +30,7 @@ class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   }
 }
 
-export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false }: AnatomyViewportProps) {
+export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false, stage = false }: AnatomyViewportProps) {
   const [focus, setFocus] = useState<AnatomyFocus>('none');
   const [view, setView] = useState<AnatomyView>('front');
   const [ready, setReady] = useState(false);
@@ -63,11 +64,11 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
     setPreview((current) => ({ ...current, mode: 'playing' }));
   }
   return (
-    <View style={styles.viewport}>
-      <View style={styles.heading}>
+    <View style={[styles.viewport, stage && styles.stageViewport]}>
+      {!stage && <View style={styles.heading}>
         <Text style={styles.eyebrow}>YOUR MOVEMENT GUIDE</Text>
         <Text style={styles.title}>Explore your anatomy</Text>
-      </View>
+      </View>}
       {__DEV__ && showLab && !sequence && (
         <View style={styles.lab}>
           <Text style={styles.label}>Movement lab · Wall angel</Text>
@@ -95,7 +96,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
           <Text style={styles.caption} accessibilityLiveRegion="polite">{preview.mode === 'completed' ? 'Composition complete · goalpost' : labSequence ? labPaused ? 'Paused at current pose' : 'Playing composed primitives' : preview.mode === 'rest' ? 'Original rest pose' : `${preview.mode[0].toUpperCase() + preview.mode.slice(1)} pose`} · rig proof</Text>
         </View>
       )}
-      <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
+      <View style={[styles.canvas, compact && { height: 320 }, stage && styles.stageCanvas]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
         <ModelBoundary>
           <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
             program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} fixedFraming={!showLab} />
@@ -107,7 +108,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
           )}
         </ModelBoundary>
       </View>
-      <View style={styles.controls}>
+      {!stage && <View style={styles.controls}>
         <View style={styles.row} accessibilityLabel="Body view">
           {(['front', 'back', 'side'] as const).map((option) => (
             <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: view === option }}
@@ -132,12 +133,14 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
           <Text style={styles.credit}>Heatsy / Z-Anatomy / BodyParts3D · CC BY-SA 4.0</Text>
         </Pressable>
         {execution.error && <Text style={styles.caption} accessibilityRole="alert">Movement unavailable: {execution.error}</Text>}
-      </View>
+      </View>}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  stageViewport: { flex: 1, borderRadius: 0 },
+  stageCanvas: { flex: 1, height: undefined },
   viewport: { backgroundColor: anatomyAppearance.background, borderRadius: 24, overflow: 'hidden' },
   heading: { gap: 8, paddingHorizontal: 20, paddingTop: 22 },
   lab: { gap: 10, paddingHorizontal: 20, paddingTop: 16 },
@@ -148,11 +151,11 @@ const styles = StyleSheet.create({
   fallback: { height: 440, justifyContent: 'center', padding: 24 },
   controls: { padding: 20, paddingTop: 8, gap: 12 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  control: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#1c2225' },
-  selected: { backgroundColor: '#d5dbde' },
-  controlText: { color: '#bac2c6', fontSize: 13 },
-  selectedText: { color: '#151a1d', fontWeight: '600' },
+  control: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: '#ededed' },
+  selected: { backgroundColor: '#353535' },
+  controlText: { color: '#303030', fontSize: 13 },
+  selectedText: { color: '#ffffff', fontWeight: '600' },
   label: { color: theme.text, fontSize: 12, fontWeight: '500' },
-  caption: { color: '#aab3b8', fontSize: 12, lineHeight: 18 },
-  credit: { color: '#aab3b8', fontSize: 11, lineHeight: 17, textDecorationLine: 'underline', paddingVertical: 6 },
+  caption: { color: '#595959', fontSize: 12, lineHeight: 18 },
+  credit: { color: '#595959', fontSize: 11, lineHeight: 17, textDecorationLine: 'underline', paddingVertical: 6 },
 });
