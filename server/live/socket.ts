@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
-import type { LiveServerMessage as GeminiMessage } from '@google/genai';
+import { FunctionResponseScheduling, type LiveServerMessage as GeminiMessage } from '@google/genai';
 import type { AgentServiceOptions } from '../agent';
 import { validateSequence } from '../../src/shared/validateSequence';
 import { hasOnlyKeys, isRecord } from '../../src/shared/validation';
@@ -58,6 +58,10 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         return planMovement(options, utterance, interpretation, current, signal);
       },
       onPlanning: active => send({ type: 'planning', active }),
+      onPlanStarted: id => provider?.sendToolResponse({ functionResponses: [{ id, name: 'request_movement',
+        willContinue: true, scheduling: FunctionResponseScheduling.INTERRUPT,
+        response: { status: 'planning', message: 'Planning started. Briefly acknowledge that you are preparing the demonstration. It is not ready yet; wait for the final result before giving movement instructions.' },
+      }] }),
       apply: (action: LiveAction, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
         if (signal.aborted || closed || pending.size >= 4) { reject(new Error('Session action unavailable.')); return; }
         const commandId = randomUUID();
@@ -97,7 +101,8 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         for (const id of message.toolCallCancellation?.ids ?? []) tools.cancel(id);
         for (const call of message.toolCall?.functionCalls ?? []) {
           void tools.handle(call).then(result => {
-            if (!closed) provider?.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: result }] });
+            if (!closed) provider?.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: result,
+              ...(call.name === 'request_movement' ? { willContinue: false, scheduling: FunctionResponseScheduling.WHEN_IDLE } : {}) }] });
           }).catch(() => close('The conversation tool connection failed.'));
         }
       } catch { close('The conversation response could not be processed.'); }

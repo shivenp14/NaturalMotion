@@ -98,7 +98,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
       <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
         <ModelBoundary>
           <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
-            program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} />
+            program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} fixedFraming={!showLab} />
           {!ready && (
             <View style={styles.loading} pointerEvents="none">
               <ActivityIndicator color={theme.accent} />

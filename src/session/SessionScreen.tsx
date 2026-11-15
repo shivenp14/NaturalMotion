@@ -23,7 +23,7 @@ export function SessionScreen() {
         </View>
         {__DEV__ && active && <AgentDevPanel />}
         {/* Reset the lab on session entry/exit so clearing a session cannot resume an old lab animation. */}
-        {active && <AnatomyViewport key={sequence ? 'session' : 'lab'} sequence={sequence} paused={paused} onPlaybackChange={recordPlayback} />}
+        {active && <AnatomyViewport sequence={sequence} paused={paused} onPlaybackChange={recordPlayback} />}
         {__DEV__ && sequence && <View style={styles.development}>
           <Text style={styles.devText}>Sequence: {sequence.id} · {playback ? `Group ${playback.stepIndex + 1} · ${playback.phase} · ${playback.status}` : 'Preparing'}</Text>
           <Pressable accessibilityRole="button" onPress={() => setPaused(!paused)} style={styles.button}>

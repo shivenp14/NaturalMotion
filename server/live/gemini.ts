@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality, Type, type LiveServerMessage, type Session } from '@google/genai';
+import { Behavior, GoogleGenAI, Modality, Type, type LiveServerMessage, type Session } from '@google/genai';
 
 export type ConversationConnection = Pick<Session, 'sendRealtimeInput' | 'sendClientContent' | 'sendToolResponse' | 'close'>;
 export type ConnectConversation = (callbacks: {
@@ -16,11 +16,12 @@ export function geminiConnector(apiKey: string, model: string, apiVersion = 'v1b
         'Only DETERMINISTIC_FORM_STATUS supplied by the application establishes a form check. Aligned means that named check only, never overall correct or safe form. Unavailable and not_observable never mean aligned. Do not infer successful form from an image. Report uncertainty and ask for a better view when appropriate.',
         'Call request_movement only when the user asks for, agrees to, or changes a demonstration. Do not call it on greetings, explanations, every camera image, or form updates. There is one planning call per user turn. Do not retry rejected calls without a new user request.',
         'request_movement delegates composition to the planner. Describe the requested demonstration in plain language; do not send joint instructions. A tool result confirms success only after the app accepts the validated sequence. If it fails or no supported sequence is available, explain the limitation.',
+        'request_movement runs in the background. Call it promptly, then immediately give one short acknowledgment such as "I’m preparing that demonstration." Keep talking available while it runs. Do not claim the demonstration is ready or give specific movement instructions until its successful result arrives. Do not fill the wait with repeated acknowledgments.',
         'Use pause_movement, resume_movement and stop_movement for corresponding user requests; stop also applies when pain is reported. Controls do not require waiting for the planner. A complete new demonstration handles speed/range changes.',
         'Form checks are available only for a verified stationary goalpost elbow-height/spread profile. Other movements may be demonstrated without form checking. Wall contact, spinal posture and muscle activation are not measured.',
       ].join('\n'),
       tools: [{ functionDeclarations: [
-        { name: 'request_movement', description: 'Request or change one supported educational movement demonstration.',
+        { name: 'request_movement', behavior: Behavior.NON_BLOCKING, description: 'Request or change one supported educational movement demonstration.',
           parameters: { type: Type.OBJECT, properties: { request: { type: Type.STRING, description: 'Brief plain-language request grounded in the user utterance.' } }, required: ['request'] } },
         ...(['pause_movement', 'resume_movement', 'stop_movement'] as const).map(name => ({
           name, description: name.replaceAll('_', ' '), parameters: { type: Type.OBJECT, properties: {} },

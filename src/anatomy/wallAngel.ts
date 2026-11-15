@@ -160,7 +160,14 @@ export function createWallAngelRig(scene: Object3D) {
   reset();
   const preparationFrom = new Map(controlled.map((bone) => [bone, bone.quaternion.clone()]));
   function beginPreparation() {
-    for (const bone of controlled) preparationFrom.get(bone)!.copy(bone.quaternion);
+    let remaining = 0;
+    for (const bone of controlled) {
+      preparationFrom.get(bone)!.copy(bone.quaternion);
+      remaining = Math.max(remaining, bone.quaternion.clone().normalize().angleTo(preparedLocal.get(bone)!.clone().normalize()));
+    }
+    // A completed goalpost already matches the starting pose. Preserve the
+    // smooth one-second transition when the body is actually elsewhere.
+    return remaining < 0.0001 ? 0 : 1;
   }
   function prepare(progress: number) {
     if (!Number.isFinite(progress) || progress < 0 || progress > 1) throw new Error('Invalid preparation progress.');

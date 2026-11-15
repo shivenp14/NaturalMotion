@@ -21,9 +21,10 @@ export type AnatomySceneProps = {
   program?: UpperBodyProgram | null;
   playbackPaused?: boolean;
   onPlaybackChange?: (state: PlaybackState) => void;
+  fixedFraming?: boolean;
 };
 
-export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange }: AnatomySceneProps) {
+export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete, program, playbackPaused = false, onPlaybackChange, fixedFraming = false }: AnatomySceneProps) {
   const gltf = useLoader(GLTFLoader, bodyAssetUri);
   const model = useMemo(() => prepareAnatomyModel(gltf.scene), [gltf.scene]);
   const rig = useMemo(() => createWallAngelRig(model.scene), [model]);
@@ -34,34 +35,36 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
   const firstFrame = useRef(true);
   const running = useRef(false);
   const programTime = useRef(0);
+  const preparationSeconds = useRef(1);
   const programDone = useRef(false);
   const focusedStep = useRef(-1);
   const callback = useRef(onPlaybackChange);
   useLayoutEffect(() => { callback.current = onPlaybackChange; }, [onPlaybackChange]);
   const report = useRef<ReturnType<typeof createPlaybackReporter> | null>(null);
   const movementVisible = !!program || (!!preview && preview.mode !== 'rest');
+  const wideFraming = fixedFraming || movementVisible;
   useLayoutEffect(() => {
     programTime.current = 0;
     programDone.current = false;
     focusedStep.current = -1;
     firstFrame.current = true;
     report.current = program ? createPlaybackReporter(program.id, (state) => callback.current?.(state)) : null;
-    if (program) { rig.beginPreparation(); rig.prepare(0); }
+    if (program) { preparationSeconds.current = rig.beginPreparation(); rig.prepare(0); }
     invalidate();
   }, [program, rig, invalidate]);
   useLayoutEffect(() => {
     if (!program || !report.current || programDone.current) return;
-    const sample = programTime.current < 1 ? { stepIndex: 0, phase: 'preparing' as const } : sampleUpperBodyProgram(program, programTime.current - 1);
+    const sample = programTime.current < preparationSeconds.current ? { stepIndex: 0, phase: 'preparing' as const } : sampleUpperBodyProgram(program, programTime.current - preparationSeconds.current);
     report.current(sample.stepIndex, sample.phase, playbackPaused ? 'paused' : 'playing', Date.now());
     firstFrame.current = true;
     invalidate();
   }, [program, playbackPaused, invalidate]);
   useLayoutEffect(() => {
-    camera.position.set(0, movementVisible ? 1.03 : 0.86, movementVisible ? 4.6 : 3.65);
-    camera.lookAt(0, movementVisible ? 1.03 : 0.86, 0);
+    camera.position.set(0, wideFraming ? 1.03 : 0.86, wideFraming ? 4.6 : 3.65);
+    camera.lookAt(0, wideFraming ? 1.03 : 0.86, 0);
     camera.updateProjectionMatrix();
     invalidate();
-  }, [camera, movementVisible, invalidate]);
+  }, [camera, wideFraming, invalidate]);
   useLayoutEffect(() => {
     if (program) { running.current = false; return; }
     const mode = preview?.mode ?? 'rest';
@@ -85,10 +88,10 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
       if (playbackPaused || programDone.current) return;
       if (firstFrame.current) firstFrame.current = false;
       else programTime.current += Math.min(delta, 0.1);
-      if (programTime.current < 1) {
-        rig.prepare(programTime.current);
+      if (programTime.current < preparationSeconds.current) {
+        rig.prepare(programTime.current / preparationSeconds.current);
       } else {
-        const sample = sampleUpperBodyProgram(program, programTime.current - 1);
+        const sample = sampleUpperBodyProgram(program, programTime.current - preparationSeconds.current);
         rig.applyPose(sample.pose);
         if (focusedStep.current !== sample.stepIndex) {
           model.setFocusCodes(program.segments[sample.stepIndex].focusCodes);
@@ -114,7 +117,7 @@ export function AnatomyScene({ focus, view, onReady, preview, onPreviewComplete,
   });
   useLayoutEffect(() => {
     if (program) {
-      const index = programTime.current < 1 ? 0 : sampleUpperBodyProgram(program, programTime.current - 1).stepIndex;
+      const index = programTime.current < preparationSeconds.current ? 0 : sampleUpperBodyProgram(program, programTime.current - preparationSeconds.current).stepIndex;
       model.setFocusCodes(program.segments[index].focusCodes);
       focusedStep.current = index;
     } else model.setFocus(focus);

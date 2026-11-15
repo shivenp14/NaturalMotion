@@ -15,17 +15,24 @@ test('live provider tool travels through the real planner validator and requires
   const sequence = createWallAngelReference(wallAngelDefaults, 'live-wire');
   let receive!: (message: ProviderMessage) => void;
   let plans = 0;
-  const responses: unknown[] = [];
+  const responses: { functionResponses: { willContinue?: boolean; response: { ok?: boolean; status?: string } }[] }[] = [];
   const media: unknown[] = [];
   const context: { turns?: { parts?: { text?: string }[] }[]; turnComplete?: boolean }[] = [];
   const options = { ...anatomyAgentCapabilities, apiKey: 'mock-openai', geminiApiKey: 'mock-gemini', model: 'mock-planner', conversationModel: 'mock-live',
-    fetch: async () => { plans++; return Response.json({ status: 'completed', output: [{ type: 'message', content: [
-      { type: 'output_text', text: JSON.stringify({ actions: [{ type: 'play_sequence', sequence }] }) },
+    fetch: async (_url: unknown, init?: RequestInit) => { plans++;
+      const request = JSON.parse(init!.body as string);
+      assert.equal(request.reasoning.effort, 'low');
+      return Response.json({ status: 'completed', output: [{ type: 'message', content: [
+      { type: 'output_text', text: JSON.stringify({ steps: sequence.steps.map(step => {
+        assert.ok('parallel' in step);
+        return { targets: step.parallel.map(command => ({ componentId: command.componentId, toDeg: command.parameters.toDeg })),
+          durationSeconds: step.durationSeconds, holdSeconds: step.holdSeconds };
+      }), message: '' }) },
     ] }] }); },
     connectConversation: async (callbacks: { message(message: ProviderMessage): void }) => {
       receive = callbacks.message;
       return { close() {}, sendRealtimeInput(value: unknown) { media.push(value); }, sendClientContent(value: typeof context[number]) { context.push(value); },
-        sendToolResponse(value: unknown) { responses.push(value); } };
+        sendToolResponse(value: typeof responses[number]) { responses.push(value); } };
     },
   };
   const server = createAgentServer(options);
@@ -48,13 +55,19 @@ test('live provider tool travels through the real planner validator and requires
   await until(() => media.length > 0);
   receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true }, toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
   await until(() => messages.some(message => message.type === 'action'));
-  assert.equal(responses.length, 0, 'No success may reach the model before client acceptance.');
+  assert.equal(responses.length, 1);
+  assert.equal(responses[0].functionResponses[0].willContinue, true);
+  assert.equal(responses[0].functionResponses[0].response.status, 'planning');
+  assert.equal(responses.some(response => response.functionResponses.some(entry => entry.response.ok)), false,
+    'A planning acknowledgment must not report success before app acceptance.');
   const action = messages.find(message => message.type === 'action')!;
   assert.ok(compileUpperBodySequence((action.action as { sequence: unknown }).sequence));
   socket.send(JSON.stringify({ type: 'applied', commandId: action.commandId, ok: true }));
-  await until(() => responses.length === 1);
-  receive(Object.assign(new ProviderMessage(), { toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
   await until(() => responses.length === 2);
+  assert.equal(responses[1].functionResponses[0].willContinue, false);
+  assert.equal(responses[1].functionResponses[0].response.ok, true);
+  receive(Object.assign(new ProviderMessage(), { toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
+  await until(() => responses.length === 3);
   assert.equal(plans, 1); assert.equal(messages.filter(message => message.type === 'action').length, 1);
   const now = Date.now();
   socket.send(JSON.stringify({ type: 'context', sequence, playback: {

@@ -2,11 +2,13 @@
 
 The Android `/live` route connects conversation, bounded movement planning, anatomy playback and one verified camera check. This is an integration screen; Roland can replace its layout while retaining the session/media boundaries.
 
+See [latency improvements and avatar verification](LATENCY_AND_AVATAR_VERIFICATION.md) for the subsequent paired measurements, current planner wire format and visual limitations.
+
 ## Data flow
 
 1. The phone streams 16 kHz mono PCM microphone audio to the local backend WebSocket at `/live`. The same native camera supplies local pose landmarks and sampled JPEGs (at most one per second, longest edge 512 px).
 2. The backend proxies audio/images to Gemini Live (`gemini-3.8-live`, API `v1beta`). Gemini talks to the user and can request movement planning, pause, resume or stop. It never supplies executable joint values directly.
-3. A movement request invokes OpenAI (`gpt-6-luna`, low reasoning), using the actual user utterance, conversation interpretation, current sequence and renderer-owned capabilities. It composes a complete replacement sequence from the six supported shoulder/elbow components.
+3. A movement request invokes OpenAI (`gpt-6-luna`, low reasoning), using the actual user utterance, conversation interpretation, current sequence and renderer-owned capabilities. It composes target-angle groups from the six supported shoulder/elbow components. Code derives starting angles and expands the groups to a complete replacement sequence. A nonblocking planning-progress response lets Gemini acknowledge the request before the sequence is ready.
 4. The backend validates the sequence, the app validates acceptance, and the renderer independently compiles it before playback. Gemini receives tool success only after the app acknowledges acceptance; this does not mean playback has completed.
 5. Deterministic code derives applicable checks from the composed endpoint. Currently only a stationary bilateral goalpost pose has a verified elbow-height/spread check. Other poses report `unavailable`; poor visibility or stale observations report `not_observable`.
 

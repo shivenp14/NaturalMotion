@@ -9,6 +9,8 @@ import { LiveClient } from '../live/LiveClient';
 import type { FormReport, LiveAction, LiveControl } from '../live/protocol';
 import type { PoseObservation } from '../shared/contracts';
 import type { LiveAudio } from '../voice/LiveAudio.types';
+import { createLiveAudio, requestLiveMicrophonePermission } from '../voice/LiveAudio';
+import { requestCameraPermission } from 'react-native-pose-detection';
 import { CameraPoseView } from '../vision/CameraPoseView';
 import { isFreshFrame, toPoseObservation, type PoseFrameLike } from '../vision/landmarks';
 import { deriveFormPlan, SequenceFormEvaluator } from '../vision/checks/registry';
@@ -108,13 +110,11 @@ export function LiveCoachScreen() {
         if (!health.conversationConfigured) throw new Error('Configure GEMINI_API_KEY on the backend first.');
         if (!health.plannerConfigured) throw new Error('Configure OPENAI_API_KEY on the backend for movement planning.');
       }
-      const media = await import('../voice/LiveAudio');
-      const camera = await import('react-native-pose-detection');
       if (run !== epoch.current || !mounted.current) return;
       permitting.current = true;
       try {
-        if (!(await camera.requestCameraPermission()).granted) throw new Error('Camera permission is required.');
-        await media.requestLiveMicrophonePermission();
+        if (!(await requestCameraPermission()).granted) throw new Error('Camera permission is required.');
+        await requestLiveMicrophonePermission();
       } finally { permitting.current = false; }
       if (run !== epoch.current || !mounted.current) return;
       if (AppState.currentState !== 'active') throw new Error('Return to the app and start the session again.');
@@ -151,7 +151,7 @@ export function LiveCoachScreen() {
         await connection.start();
       }
       if (run !== epoch.current || !mounted.current) return;
-      const driver = media.createLiveAudio(); audio.current = driver;
+      const driver = createLiveAudio(); audio.current = driver;
       await driver.start((data, peak) => {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
@@ -205,7 +205,7 @@ export function LiveCoachScreen() {
           {!!cameraWarning && <Text style={styles.note}>{cameraWarning}</Text>}
           <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
         </>}
-        <AnatomyViewport key={session.sequence ? 'session' : 'empty'} sequence={session.sequence} paused={session.paused}
+        <AnatomyViewport sequence={session.sequence} paused={session.paused}
           onPlaybackChange={session.recordPlayback} showLab={false} compact />
         <Text style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
         {session.sequence && <>

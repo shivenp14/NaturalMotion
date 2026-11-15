@@ -137,3 +137,19 @@ test('wall-angel focus uses represented parts and excludes lats from the preview
   assert.ok(selected > 0);
   model.dispose();
 });
+
+test('preparation preserves a smooth transition but skips an already reached starting pose', async () => {
+  const model = prepareAnatomyModel((await asset).scene);
+  const rig = createWallAngelRig(model.scene);
+  assert.equal(rig.beginPreparation(), 1);
+  const before = model.scene.getObjectByName('handL')!.getWorldPosition(new Vector3());
+  rig.prepare(0);
+  assert.ok(before.distanceTo(model.scene.getObjectByName('handL')!.getWorldPosition(new Vector3())) < 0.00001);
+  rig.prepare(1);
+  assert.equal(rig.beginPreparation(), 0);
+  rig.apply(1);
+  assert.equal(rig.beginPreparation(), 1);
+  rig.prepare(1);
+  assert.equal(rig.beginPreparation(), 0);
+  model.dispose();
+});
