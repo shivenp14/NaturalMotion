@@ -23,6 +23,7 @@ export class LiveClient {
   private pendingContext: Extract<LiveClientMessage, { type: 'context' }> | null = null;
   private clockSentAt: number | null = null;
   private clockOffset: number | null = null;
+  private clockUncertainty = 0;
   constructor(private readonly options: LiveClientOptions) {}
   private now() { return this.options.now?.() ?? Date.now(); }
   start(): Promise<void> {
@@ -61,6 +62,7 @@ export class LiveClient {
             // Midpoint estimate bounds uncertainty to half the measured round trip.
             // Preserve server-owned absolute action expiry, including time spent in transit.
             this.clockOffset = input.serverNow - (this.clockSentAt + receivedAt) / 2;
+            this.clockUncertainty = (receivedAt - this.clockSentAt) / 2;
             this.send(this.options.context, true);
             return;
           }
@@ -80,7 +82,10 @@ export class LiveClient {
             if (this.applied.size >= 128 && !isControl) throw new Error('Live action limit reached.');
             const commandId = input.commandId;
             if (this.applied.has(commandId)) { this.send({ type: 'applied', commandId, ok: true }); return; }
-            if (this.cancelled.has(commandId) || this.clockOffset === null || this.now() + this.clockOffset > input.expiresAt) { this.send({ type: 'applied', commandId, ok: false }); return; }
+            // Use the upper bound: asymmetric transit may make the midpoint
+            // estimate lag the server, and cancellation can still be in flight.
+            if (this.cancelled.has(commandId) || this.clockOffset === null ||
+              this.now() + this.clockOffset + this.clockUncertainty >= input.expiresAt) { this.send({ type: 'applied', commandId, ok: false }); return; }
             let ok = false;
             try {
               this.options.apply(input.action as LiveAction);
@@ -113,7 +118,7 @@ export class LiveClient {
   stop() {
     this.active = false; this.ready = false;
     this.pendingContext = null;
-    this.clockSentAt = null; this.clockOffset = null;
+    this.clockSentAt = null; this.clockOffset = null; this.clockUncertainty = 0;
     if (this.startTimer) clearTimeout(this.startTimer); this.startTimer = null;
     this.rejectStart?.(new Error('Live session cancelled.')); this.rejectStart = null;
     const socket = this.socket; this.socket = null;

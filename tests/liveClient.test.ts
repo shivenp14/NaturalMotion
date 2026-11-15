@@ -94,3 +94,26 @@ test('uncertain clock synchronization fails closed before provider initializatio
   await assert.rejects(starting); assert.equal(socket.readyState, 3);
   assert.equal(socket.messages.some(message => message.type === 'context'), false);
 });
+
+test('asymmetric synchronization delays cannot let an expired action run before its cancellation arrives', async () => {
+  for (const skew of [-120000, 120000]) for (const outbound of [0, 1800]) {
+    const socket = new FakeSocket(); let applied = 0; let serverNow = 1000;
+    const client = new LiveClient({ baseUrl: 'http://localhost:3001', socketFactory: () => socket,
+      now: () => serverNow + skew, context: { type: 'context', sequence: null, playback: null },
+      apply: () => { applied++; }, onMessage: () => {}, onClose: () => {} });
+    const starting = client.start();
+    socket.onopen?.call(socket as unknown as WebSocket, new Event('open'));
+    serverNow += 1800; // Round trip with either all outbound or all return delay.
+    socket.receive({ type: 'clock', clientSentAt: 1000 + skew, serverNow: 1000 + outbound });
+    socket.receive({ type: 'ready', conversationModel: 'fixture', plannerModel: 'fixture' }); await starting;
+    serverNow = 3000;
+    socket.receive({ type: 'action', commandId: 'fresh', action: { type: 'pause_movement' }, expiresAt: 7000 });
+    assert.equal(applied, 1, 'Ordinary unexpired actions still apply.');
+    serverNow = 7400;
+    // In the return-delay case the midpoint says 6500, although the server's
+    // deadline has passed. Deliver the stale action before its cancellation.
+    socket.receive({ type: 'action', commandId: 'delayed', action: { type: 'pause_movement' }, expiresAt: 7000 });
+    assert.equal(applied, 1); assert.equal(socket.messages.at(-1)!.ok, false);
+    socket.receive({ type: 'cancel', commandId: 'delayed' }); client.stop();
+  }
+});
