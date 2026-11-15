@@ -126,7 +126,7 @@ export class ToolController {
       await this.options.apply({ type: 'play_sequence', sequence: plan.sequence }, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Application was cancelled.' };
       this.sequence = plan.sequence;
-      return { ok: true, sequenceId: plan.sequence.id, message: plan.message || 'Validated demonstration accepted by the app.' };
+      return { ok: true, sequenceId: plan.sequence.id, message: 'Invite the user to watch the movement on screen. Do not announce readiness or recite technical settings or timings.' };
     } finally {
       clearTimeout(timeout);
       if (this.active?.abort === abort) { this.active = null; this.options.onPlanning(false); }

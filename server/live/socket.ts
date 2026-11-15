@@ -61,7 +61,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
       onPlanning: active => send({ type: 'planning', active }),
       onPlanStarted: id => provider?.sendToolResponse({ functionResponses: [{ id, name: 'request_movement',
         willContinue: true, scheduling: FunctionResponseScheduling.INTERRUPT,
-        response: { status: 'planning', message: 'Planning started. Briefly acknowledge that you are preparing the demonstration. It is not ready yet; wait for the final result before giving movement instructions.' },
+        response: { status: 'planning', message: 'If you have not acknowledged this request, briefly say "Sure, I’ll show you." Do not narrate planning or announce readiness. Wait for the final successful result before directing the user to watch the movement.' },
       }] }),
       apply: (action: LiveAction, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
         if (signal.aborted || closed || pending.size >= 4) { reject(new Error('Session action unavailable.')); return; }
