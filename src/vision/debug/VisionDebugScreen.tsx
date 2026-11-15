@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../../ui/theme';
@@ -41,6 +41,18 @@ export function VisionDebugScreen() {
   const [fps, setFps] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
+  const [cameraGeneration, setCameraGeneration] = useState(0);
+  const [trackingLost, setTrackingLost] = useState(false);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (stabilizer.current.expire(Date.now())) {
+        setSnapshot(null);
+        setTrackingLost(true);
+      }
+    }, 200);
+    return () => clearInterval(timer);
+  }, []);
 
   function handleFrame(frame: PoseFrameLike) {
     const now = Date.now();
@@ -53,6 +65,7 @@ export function VisionDebugScreen() {
     if (!event) return;
 
     const stableStatus = stabilizer.current.update(event.status, event.observedAt);
+    setTrackingLost(false);
     setSnapshot({ observation, event, stableStatus });
   }
 
@@ -60,6 +73,13 @@ export function VisionDebugScreen() {
     stabilizer.current.reset();
     setSnapshot(null);
     setFrameCount(0);
+    setTrackingLost(false);
+    setReady(null);
+    setFps(null);
+    setError(null);
+    playback.current = { ...playback.current, updatedAt: 0 };
+    // Remount the native camera too: clearing UI counters does not reset a bad tracker.
+    setCameraGeneration((generation) => generation + 1);
   }
 
   const measurements = snapshot?.event.measurements;
@@ -68,6 +88,7 @@ export function VisionDebugScreen() {
     <SafeAreaView style={styles.screen}>
       <View style={styles.camera}>
         <CameraPoseView
+          key={cameraGeneration}
           onFrame={handleFrame}
           onReady={setReady}
           onPerformance={setFps}
@@ -79,13 +100,15 @@ export function VisionDebugScreen() {
         <View style={styles.row}>
           <Text style={styles.eyebrow}>VISION DEBUG · NOT A SESSION</Text>
           <Pressable accessibilityRole="button" onPress={reset}>
-            <Text style={styles.reset}>Reset</Text>
+            <Text style={styles.reset}>Restart camera</Text>
           </Pressable>
         </View>
 
         <View style={styles.statusRow}>
           <View style={[styles.dot, { backgroundColor: statusColor(snapshot?.stableStatus ?? null) }]} />
-          <Text style={styles.status}>{statusLabel(snapshot?.stableStatus ?? null)}</Text>
+          <Text style={styles.status}>
+            {trackingLost ? 'tracking lost · reposition in view' : statusLabel(snapshot?.stableStatus ?? null)}
+          </Text>
         </View>
 
         <Text style={styles.muted}>
@@ -97,6 +120,11 @@ export function VisionDebugScreen() {
         </Text>
 
         {error && <Text style={styles.error}>{error}</Text>}
+
+        <Text style={styles.muted}>
+          Keep your head, shoulders, elbows and hips in view. Face the camera with light in front
+          of you; avoid a bright window or ceiling light behind your head.
+        </Text>
 
         <Text style={styles.section}>MEASUREMENTS (shoulder widths)</Text>
         <MetricRow label="elbow above shoulder" value={measurements?.elbowAboveShoulder} />

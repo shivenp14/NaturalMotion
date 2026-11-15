@@ -167,6 +167,27 @@ test('a long gap drops the stable status', () => {
   assert.equal(stabilizer.update('aligned', 2_000), null);
 });
 
+test('loss of visibility immediately invalidates aligned and recovery requires steady evidence', () => {
+  const stabilizer = new StatusStabilizer(2, 1_000);
+  stabilizer.update('aligned', 1_000);
+  assert.equal(stabilizer.update('aligned', 1_100), 'aligned');
+  assert.equal(stabilizer.update('not_observable', 1_200), 'not_observable');
+  assert.equal(stabilizer.update('aligned', 1_300), 'not_observable');
+  assert.equal(stabilizer.update('aligned', 1_400), 'aligned');
+});
+
+test('the watchdog expires a result even when native sends no more pose callbacks', () => {
+  const stabilizer = new StatusStabilizer(2, 1_000);
+  assert.equal(stabilizer.expire(1_000), false);
+  stabilizer.update('aligned', 1_000);
+  stabilizer.update('aligned', 1_100);
+  assert.equal(stabilizer.expire(2_100), false);
+  assert.equal(stabilizer.expire(2_101), true);
+  assert.equal(stabilizer.expire(2_200), false);
+  assert.equal(stabilizer.update('aligned', 2_300), null);
+  assert.equal(stabilizer.update('aligned', 2_400), 'aligned');
+});
+
 const playback: PlaybackState = {
   sequenceId: 'debug-session',
   stepIndex: 0,

@@ -27,6 +27,15 @@ export class StatusStabilizer {
     }
     this.lastObservedAt = observedAt;
 
+    // Loss of evidence invalidates any previous judgment immediately. Recovery still needs
+    // consecutive good observations; an unseen body must never inherit an aligned status.
+    if (status === 'not_observable') {
+      this.candidate = null;
+      this.candidateCount = 0;
+      this.stable = 'not_observable';
+      return this.stable;
+    }
+
     if (status === this.candidate) {
       this.candidateCount += 1;
     } else {
@@ -35,6 +44,13 @@ export class StatusStabilizer {
     }
     if (this.candidateCount >= this.minimumFrames) this.stable = status;
     return this.stable;
+  }
+
+  /** Native emits no onPose callback when detection is empty. Call from a UI watchdog. */
+  expire(now: number): boolean {
+    if (this.lastObservedAt === 0 || now - this.lastObservedAt <= this.maximumGapMs) return false;
+    this.reset();
+    return true;
   }
 
   reset(): void {

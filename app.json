@@ -30,7 +30,7 @@
       [
         "react-native-pose-detection",
         {
-          "model": "lite",
+          "model": "full",
           "cameraPermissionText": "NaturalMotion uses the camera to observe your movement. Video stays on this phone."
         }
       ]

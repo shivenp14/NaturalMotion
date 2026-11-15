@@ -55,6 +55,7 @@ export function CameraPoseView({
     <PoseCamera
       style={styles.camera}
       facing="front"
+      minConfidence={0.5}
       active={active}
       data={{ mode: 'throttled', throttleMs: 100 }}
       overlay={{ color: theme.accent, lineWidth: 3, pointRadius: 4, minVisibility: 0.5 }}
