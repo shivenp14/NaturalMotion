@@ -1,6 +1,7 @@
 import { AudioContext, AudioManager, AudioRecorder, type AudioBufferQueueSourceNode } from 'react-native-audio-api';
 import type { LiveAudio } from './LiveAudio.types';
 import { encodePcm16 } from './pcm';
+import { PcmDecodeBudget } from './pcmDecodeBudget';
 
 export async function requestLiveMicrophonePermission() {
   if (await AudioManager.requestRecordingPermissions() !== 'Granted') throw new Error('Microphone permission is required for live conversation.');
@@ -18,22 +19,28 @@ export function createLiveAudio(): LiveAudio {
   let onFailure: (message: string) => void = () => {};
   const durations = new Map<string, number>();
   let queuedSeconds = 0;
+  const pending = new PcmDecodeBudget();
   function enqueue(base64: string) {
     const epoch = generation;
     const current = context;
     if (!active || !current) return;
+    let release: () => void;
+    try { release = pending.reserve(base64, queuedSeconds); }
+    catch (error) { onFailure(error instanceof Error ? error.message : 'Audio playback failed.'); return; }
     decoding = decoding.then(async () => {
       if (!active || generation !== epoch || context !== current) return;
       const buffer = await current.decodePCMInBase64(base64, 24000, 1);
       if (!active || generation !== epoch || !queue) return;
-      if (queuedSeconds + buffer.duration > 15) throw new Error('Audio playback fell behind. Restart the live session.');
+      release();
+      if (pending.seconds + queuedSeconds + buffer.duration > 15) throw new Error('Audio playback fell behind. Restart the live session.');
       const id = queue.enqueueBuffer(buffer);
       durations.set(id, buffer.duration); queuedSeconds += buffer.duration;
       if (!started) { queue.start(); started = true; }
-    }).catch(error => { if (active && generation === epoch) onFailure(error instanceof Error ? error.message : 'Audio playback failed.'); });
+    }).catch(error => { if (active && generation === epoch) onFailure(error instanceof Error ? error.message : 'Audio playback failed.'); }).finally(release);
   }
   function interrupt() {
-    generation++; queue?.clearBuffers(); durations.clear(); queuedSeconds = 0;
+    generation++; queue?.clearBuffers(); durations.clear(); queuedSeconds = 0; pending.reset();
+    decoding = Promise.resolve();
   }
   return {
     async start(onAudio, onError) {

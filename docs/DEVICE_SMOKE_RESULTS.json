@@ -11,25 +11,25 @@
       "name": "app_launch",
       "required": true,
       "status": "pass",
-      "durationMs": 5977
+      "durationMs": 6230
     },
     {
       "name": "local_controls_cleanup",
       "required": true,
       "status": "pass",
-      "durationMs": 11574
+      "durationMs": 7613
     },
     {
       "name": "live_connection_playback",
       "required": true,
       "status": "pass",
-      "durationMs": 25205
+      "durationMs": 22516
     },
     {
       "name": "diagnostic_camera_frames_restart",
       "required": true,
       "status": "pass",
-      "durationMs": 1667
+      "durationMs": 1558
     },
     {
       "name": "pose_frame_arrival",
@@ -41,7 +41,7 @@
       "name": "final_cleanup",
       "required": true,
       "status": "pass",
-      "durationMs": 1283
+      "durationMs": 1262
     }
   ],
   "manualReview": [

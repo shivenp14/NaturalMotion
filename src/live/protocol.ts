@@ -9,6 +9,7 @@ export type FormReport = {
   mode: 'demonstration' | 'practice';
 };
 export type LiveClientMessage =
+  | { type: 'clock'; clientSentAt: number }
   | { type: 'context'; sequence: MovementSequence | null; playback: PlaybackState | null; practiceStartedAt?: number | null }
   | { type: 'audio'; data: string }
   | { type: 'image'; data: string; observedAt: number }
@@ -17,6 +18,7 @@ export type LiveClientMessage =
   | { type: 'applied'; commandId: string; ok: boolean }
   | { type: 'control'; name: LiveControl };
 export type LiveServerMessage =
+  | { type: 'clock'; clientSentAt: number; serverNow: number }
   | { type: 'ready'; conversationModel: string; plannerModel: string }
   | { type: 'transcript'; role: 'user' | 'assistant'; text: string }
   | { type: 'audio'; data: string }

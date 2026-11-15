@@ -85,8 +85,13 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
       try {
         const content = message.serverContent;
         if (content?.interrupted) { tools.interrupt(); send({ type: 'interrupted' }); }
-        if (message.voiceActivity?.voiceActivityType === 'ACTIVITY_START') tools.beginSpeech();
-        if (message.voiceActivity?.voiceActivityType === 'ACTIVITY_END') tools.endSpeech();
+        // SDK 3.3 declares voiceActivityType, but the v1beta native-audio
+        // endpoint also emits {type, audioOffset}. Both are provider boundaries;
+        // inputTranscription.finished is optional and absent in observed speech.
+        const activity: unknown = message.voiceActivity;
+        const activityType = isRecord(activity) ? activity.voiceActivityType ?? activity.type : undefined;
+        if (activityType === 'ACTIVITY_START') tools.beginSpeech();
+        if (activityType === 'ACTIVITY_END') tools.endSpeech();
         if (content?.inputTranscription) {
           tools.noteInput(content.inputTranscription.text ?? '', content.inputTranscription.finished);
           if (content.inputTranscription.text) send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
@@ -108,6 +113,8 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         }
         // A provider message can contain both completion and tool calls. An
         // acknowledgment turn while a tool is pending is not request completion.
+        // Wait for the provider's post-tool output turn, including cached calls;
+        // settling a tool promise alone does not mean that response was spoken.
         if (content?.turnComplete) { tools.finishTurn(); if (pendingTools === 0) send({ type: 'turn_complete' }); }
       } catch { close('The conversation response could not be processed.'); }
     }
@@ -121,6 +128,9 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         const input: unknown = JSON.parse(raw.toString());
         if (!isRecord(input)) throw new Error('Expected a message.');
         switch (input.type) {
+          case 'clock':
+            if (!hasOnlyKeys(input, ['type', 'clientSentAt']) || typeof input.clientSentAt !== 'number' || !Number.isFinite(input.clientSentAt)) throw new Error('Invalid clock synchronization.');
+            send({ type: 'clock', clientSentAt: input.clientSentAt, serverNow: now }); break;
           case 'context': {
             if (!hasOnlyKeys(input, ['type', 'sequence', 'playback', 'practiceStartedAt'])) throw new Error('Invalid context.');
             const checked = input.sequence === null ? null : validateSequence(input.sequence, options.catalog ?? [], options.compositionPolicy);

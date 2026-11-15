@@ -49,7 +49,12 @@ test('live provider tool travels through the real planner validator and requires
     while (!predicate() && Date.now() < deadline) await new Promise<void>(resolve => waiting.push(resolve));
     clearTimeout(timeout); assert.ok(predicate(), 'Expected live protocol event.');
   };
-  await once(socket, 'open'); socket.send(JSON.stringify({ type: 'context', sequence: null, playback: null }));
+  await once(socket, 'open');
+  socket.send(JSON.stringify({ type: 'clock', clientSentAt: 123 }));
+  await until(() => messages.some(message => message.type === 'clock'));
+  const clock = messages.find(message => message.type === 'clock')!;
+  assert.equal(clock.clientSentAt, 123); assert.ok(Math.abs(Date.now() - (clock.serverNow as number)) < 1000);
+  socket.send(JSON.stringify({ type: 'context', sequence: null, playback: null }));
   await until(() => messages.some(message => message.type === 'ready'));
   socket.send(JSON.stringify({ type: 'text', text: 'Show a wall angel.' }));
   socket.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(3200).toString('base64') }));
@@ -70,9 +75,30 @@ test('live provider tool travels through the real planner validator and requires
   await until(() => messages.some(message => message.type === 'turn_complete'));
   assert.equal(responses[1].functionResponses[0].willContinue, false);
   assert.equal(responses[1].functionResponses[0].response.ok, true);
-  receive(Object.assign(new ProviderMessage(), { toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
+  const completedBeforeDuplicate = messages.filter(message => message.type === 'turn_complete').length;
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true },
+    toolCall: { functionCalls: [{ id: 'call-1', name: 'request_movement', args: { request: 'Wall angel' } }] } }));
   await until(() => responses.length === 3);
   assert.equal(plans, 1); assert.equal(messages.filter(message => message.type === 'action').length, 1);
+  assert.equal(messages.filter(message => message.type === 'turn_complete').length, completedBeforeDuplicate,
+    'Cached tool responses still require a later provider output completion, not a synthetic finally event.');
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
+  await until(() => messages.filter(message => message.type === 'turn_complete').length === completedBeforeDuplicate + 1);
+  // The observed native-audio endpoint uses `type`; SDK 3.3 declares
+  // `voiceActivityType`. Neither path requires optional transcription.finished.
+  for (const field of ['type', 'voiceActivityType']) {
+    const beforeActions = messages.filter(message => message.type === 'action').length;
+    const beforeResponses = responses.length;
+    receive(Object.assign(new ProviderMessage(), { voiceActivity: { [field]: 'ACTIVITY_START' } }));
+    receive(Object.assign(new ProviderMessage(), { serverContent: { inputTranscription: { text: 'Show one small wall angel.' } } }));
+    receive(Object.assign(new ProviderMessage(), { voiceActivity: { [field]: 'ACTIVITY_END' },
+      toolCall: { functionCalls: [{ id: `spoken-${field}`, name: 'request_movement', args: { request: 'Small wall angel' } }] } }));
+    await until(() => messages.filter(message => message.type === 'action').length === beforeActions + 1);
+    socket.send(JSON.stringify({ type: 'applied', commandId: messages.filter(message => message.type === 'action').at(-1)!.commandId, ok: true }));
+    await until(() => responses.length === beforeResponses + 2);
+    assert.equal(responses.at(-1)!.functionResponses[0].response.ok, true);
+  }
+  assert.equal(plans, 3);
   const now = Date.now();
   socket.send(JSON.stringify({ type: 'context', sequence, playback: {
     sequenceId: sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
