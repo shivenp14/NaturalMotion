@@ -33,7 +33,9 @@ test('live provider tool travels through the real planner validator and requires
     ] }] }); },
     connectConversation: async (callbacks: { message(message: ProviderMessage): void }) => {
       receive = callbacks.message;
-      return { close() {}, sendRealtimeInput(value: unknown) { media.push(value); }, sendClientContent(value: typeof context[number]) { context.push(value); },
+      return { close() {}, sendRealtimeInput(value: unknown) { media.push(value); }, sendClientContent(value: typeof context[number]) {
+        context.push(value); for (const wake of waiting.splice(0)) wake();
+      },
         sendToolResponse(value: typeof responses[number]) { responses.push(value); } };
     },
   };
