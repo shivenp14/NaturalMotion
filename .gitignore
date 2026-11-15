@@ -42,3 +42,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Server-only provider configuration
+server/.env
+
+# Local-only personal coding standards.
+CODING_STANDARDS.md

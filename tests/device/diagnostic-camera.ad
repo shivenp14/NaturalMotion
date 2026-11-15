@@ -1,0 +1,6 @@
+context platform=android
+open "${APP_ID}" "${DIAGNOSTIC_URL}"
+wait 'id="vision-debug-screen"' 10000
+wait 'id="vision-camera-arrived-0"' 20000
+press 'id="vision-restart"'
+wait 'id="vision-camera-arrived-1"' 20000

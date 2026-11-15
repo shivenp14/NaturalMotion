@@ -8,9 +8,10 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 - A native landing/session shell and a rigged anatomy viewer with graphite finish, view controls, and educational region highlighting.
 - Shared movement, playback, pose, and form-feedback contracts.
 - Runtime sequence validation and feedback freshness helpers with protocol tests.
+- Native recognition/TTS adapters, validated half-duplex turn coordination, and a development echo test.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-**The agent-facing movement catalog is intentionally empty.** The anatomy viewer now executes validated [composable upper-body sequences](docs/MOVEMENT_COMPOSITION.md), emits playback events and includes a [wall-angel reference preview](docs/WALL_ANGEL_PROGRESS.md). Pose estimation, microphone capture, agent/session integration and camera-check metadata are not connected yet. The session button stays disabled until those integrations exist. Register only the capabilities and checks agreed by the team; optional deformation polish is tracked separately.
+The live coach uses Gemini for audio/camera conversation and a separate OpenAI planner for validated movement composition. The renderer and conditional goalpost elbow check run deterministically. Real providers and Android 17 emulator playback are verified; physical-phone speech, audible responses and combined-load acceptance remain. See the [live coach setup and test evidence](docs/LIVE_COACH_HANDOFF.md).
 
 ## Quick start
 
@@ -23,15 +24,9 @@ npm ci
 npm run check
 ```
 
-### Fast shell preview
+### Native integration
 
-```bash
-npm run start:go
-```
-
-Open the QR code in an **SDK 58-compatible Expo Go** installation on Android. Keep the computer and phone on the same network. If the app-store Expo Go version does not match, use a matching Android client from Expo or the development-build path below. Expo Go is for this starter shell; future native pose/audio/graphics modules may require a custom build.
-
-For a browser-only shell preview, use `npm run web`. Browser success does not validate Android hardware integrations.
+Use an Android development build for the app. The camera, audio and anatomy modules require native code; Expo Go cannot run the integrated route. Browser preview does not validate these integrations.
 
 ### Android development build: preferred integration path
 
@@ -80,9 +75,12 @@ Person 1 coordinates dependency/config/lockfile edits. Person 3 coordinates shar
 - `src/shared/validateSequence.ts`: validate untrusted agent output against registered parameter ranges before playback.
 - `src/shared/formEvents.ts`: reject events from the wrong sequence/step, unsupported checks, and old/future observations. The vision owner must also gate checks by supported phases and validate adapter output.
 - `src/session/SessionProvider.tsx`: `acceptSequence`, `phase`, `sequence`, and `reset`. Extend session coordination here rather than creating disconnected stores.
-- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Sequence playback and its reserved callback remain the next integration step; see `docs/ANATOMY_PROGRESS.md`.
+- `src/anatomy/AnatomyViewport.tsx`: graphite anatomy viewer. Accepted sequences execute here and report playback state to the session; see `docs/MOVEMENT_COMPOSITION.md`.
 - `src/vision/types.ts`: camera adapter and form-evaluator boundaries.
 - `src/agent/types.ts` / `src/voice/types.ts`: service and audio adapter boundaries.
+- `src/agent/validateAgentReturn.ts`: validate complete action batches before dispatch.
+- `src/agent/decide.ts`: deterministic, visibility-aware feedback cue selection.
+- [Agent contract alignment](docs/WORKER3_CONTRACTS.md): Shiven’s canonical sequence format, simultaneous commands, and trusted composition-policy wiring.
 
 The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a supported exercise and is not registered in the application catalog.
 
@@ -94,24 +92,27 @@ The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a sup
 4. Register that component, implement the renderer and evaluator, then give the catalog to the agent.
 5. Connect voice, playback, and real observations on the Android phone before expanding coverage.
 
-Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. The anatomy viewer uses React Three Fiber and Expo GL; camera and voice packages remain deferred until their integration paths are selected.
+Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and native voice packages are installed. Rebuild the development client with both sets of native modules and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md). The integrated live route shares one camera between pose processing and sampled images; see the [live handoff](docs/LIVE_COACH_HANDOFF.md).
 
 ## Configuration and secrets
 
-Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. Person 3 should choose and implement the backend/provider integration separately.
+Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. The backend uses Gemini and OpenAI with server-only keys in `server/.env`. Both key/value pairs are sufficient; model settings have defaults. Set the public backend URL separately for Metro; see the [live setup](docs/LIVE_COACH_HANDOFF.md).
 
-When connecting a physical phone to a laptop service, use a reachable LAN address or HTTPS endpoint. `localhost` on the phone refers to the phone itself. No backend service is included or started by this scaffold.
+When connecting a physical phone to a laptop service, use a reachable LAN address or HTTPS endpoint. `localhost` on the phone refers to the phone itself. Run `npm run server` for the local agent backend; see [agent setup](docs/AGENT_BACKEND_HANDOFF.md).
 
 ## Checks
 
 ```bash
 npm run check             # lint, typecheck, contract tests
 npm run export:android    # verify Android JavaScript bundling; not a native APK build
+npm run test:device       # requires a device_open-bound command; see device smoke guide
 npx expo install --check  # verify SDK dependency versions
 npx expo-doctor           # project diagnostics
 ```
 
 CI runs checks and the Android JavaScript export. Native compilation and Android 17 device verification remain separate checks.
+
+Reusable device verification covers live controls, connection, validated playback, cleanup and diagnostic camera arrival. See [device smoke commands and limits](docs/DEVICE_SMOKE_TESTS.md); `npm run check:device` combines regressions and device checks when the documented environment is configured.
 
 At scaffold handoff, lint, both TypeScript checks, all six contract tests, Android JavaScript export, and all 20 Expo Doctor checks passed. A native APK has not been built or installed on the presentation phone.
 

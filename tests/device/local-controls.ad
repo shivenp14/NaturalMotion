@@ -1,0 +1,19 @@
+context platform=android
+open "${APP_ID}" "${LIVE_URL}"
+wait 'id="live-stopped"' 15000
+scroll up --until 'id="live-local-start"'
+press 'id="live-local-start"'
+wait 'id="live-local-ready"' 15000
+scroll down --until 'id="live-local-reference"'
+press 'id="live-local-reference"'
+wait 'id="live-playback-active"' 10000
+press 'id="live-end"'
+press 'id="live-end"'
+wait 'id="live-stopped"' 15000
+wait 'id="live-playback-idle"' 5000
+wait absent 'id="live-camera"' 5000
+scroll up --until 'id="live-local-start"'
+press 'id="live-local-start"'
+wait 'id="live-local-ready"' 15000
+press 'id="live-end"'
+wait 'id="live-stopped"' 15000

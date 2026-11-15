@@ -92,6 +92,13 @@ test('compiled poses drive the real rig, support one-sided rotation and preserve
     rig.applyPose(sampleUpperBodyProgram(program, time).pose);
     for (const bone of model.meshes[0].skeleton.bones) assert.ok(bone.quaternion.toArray().every(Number.isFinite));
   }
+  let lastWrist: Vector3 | null = null;
+  for (let frame = 0; frame <= program.durationSeconds * 60; frame++) {
+    rig.applyPose(sampleUpperBodyProgram(program, frame / 60).pose);
+    const wrist = model.scene.getObjectByName('handL')!.getWorldPosition(new Vector3());
+    if (lastWrist) assert.ok(wrist.distanceTo(lastWrist) < 0.03, 'Continuous authored motion must not flip or jump between 60 Hz samples.');
+    lastWrist = wrist;
+  }
   rig.applyPose(sampleUpperBodyProgram(program, 1.5).pose);
   const beforePreparation = model.meshes[0].skeleton.bones.map((bone) => bone.quaternion.toArray());
   rig.beginPreparation(); rig.prepare(0);

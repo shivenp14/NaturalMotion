@@ -1,0 +1,94 @@
+{
+  "baselineCommit": "5fdf5ab",
+  "input": "typed requests; independent sessions; alternating before/after; host acknowledgments, no native onset timing",
+  "measurements": [
+    {
+      "label": "before",
+      "sample": 1,
+      "kind": "movement",
+      "preActionSpeech": "",
+      "planningStartedMs": 450,
+      "actionMs": 5226,
+      "groups": 2,
+      "plannerMs": 4776,
+      "firstAudioMs": 5709,
+      "completedMs": 8958
+    },
+    {
+      "label": "after",
+      "sample": 1,
+      "kind": "movement",
+      "preActionSpeech": "I'm preparing that demonstration for you now.",
+      "planningStartedMs": 425,
+      "firstAudioMs": 908,
+      "actionMs": 3689,
+      "groups": 2,
+      "plannerMs": 3264,
+      "completedMs": 6365
+    },
+    {
+      "label": "before",
+      "sample": 2,
+      "kind": "movement",
+      "preActionSpeech": "",
+      "planningStartedMs": 506,
+      "actionMs": 5882,
+      "groups": 2,
+      "plannerMs": 5376,
+      "firstAudioMs": 6392,
+      "completedMs": 10481
+    },
+    {
+      "label": "after",
+      "sample": 2,
+      "kind": "movement",
+      "preActionSpeech": "I am preparing that demonstration for you now.",
+      "planningStartedMs": 429,
+      "firstAudioMs": 904,
+      "actionMs": 4690,
+      "groups": 2,
+      "plannerMs": 4261,
+      "completedMs": 9601
+    },
+    {
+      "label": "before",
+      "sample": 3,
+      "kind": "movement",
+      "preActionSpeech": "",
+      "planningStartedMs": 293,
+      "actionMs": 5514,
+      "groups": 2,
+      "plannerMs": 5221,
+      "firstAudioMs": 5945,
+      "completedMs": 9849
+    },
+    {
+      "label": "after",
+      "sample": 3,
+      "kind": "movement",
+      "preActionSpeech": "I'm preparing that demonstration for you now.",
+      "planningStartedMs": 424,
+      "firstAudioMs": 1041,
+      "actionMs": 3608,
+      "groups": 2,
+      "plannerMs": 3184,
+      "completedMs": 5888
+    },
+    {
+      "label": "before",
+      "sample": 4,
+      "kind": "explanation",
+      "preActionSpeech": "A wall angel is an exercise where you slide your arms and back against a wall to improve shoulder mobility and posture.",
+      "firstAudioMs": 443,
+      "completedMs": 7016
+    },
+    {
+      "label": "after",
+      "sample": 4,
+      "kind": "explanation",
+      "preActionSpeech": "A wall angel is an exercise where you stand with your back against a wall and move your arms up and down while maintaining contact with the surface.",
+      "firstAudioMs": 656,
+      "completedMs": 8000
+    }
+  ]
+}

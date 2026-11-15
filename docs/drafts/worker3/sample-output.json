@@ -1,0 +1,75 @@
+{
+  "initialAgentReturn": {
+    "decisionId": "d_user_1",
+    "trigger": {
+      "type": "user_utterance",
+      "id": "utterance_1"
+    },
+    "actions": [
+      {
+        "type": "speak_cue",
+        "cueId": "introduction"
+      },
+      {
+        "type": "play_sequence",
+        "sequence": {
+          "sequenceId": "seq_demo_1",
+          "steps": [
+            {
+              "stepId": "step_1",
+              "componentId": "overhead_reach",
+              "parameters": {
+                "speed": "normal",
+                "side": "both",
+                "repetitions": 2,
+                "holdSeconds": 2
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "correction": {
+    "decisionId": "decision_vision_001",
+    "trigger": {
+      "type": "form_event",
+      "id": "vision_001"
+    },
+    "actions": [
+      {
+        "type": "speak_cue",
+        "cueId": "torso_center"
+      }
+    ]
+  },
+  "acknowledgment": {
+    "decisionId": "decision_vision_002",
+    "trigger": {
+      "type": "form_event",
+      "id": "vision_002"
+    },
+    "actions": [
+      {
+        "type": "speak_cue",
+        "cueId": "alignment_improved"
+      }
+    ]
+  },
+  "modifyAgentReturn": {
+    "decisionId": "d_user_2",
+    "trigger": {
+      "type": "user_utterance",
+      "id": "utterance_2"
+    },
+    "actions": [
+      {
+        "type": "modify_playback",
+        "stepId": "step_1",
+        "parameters": {
+          "speed": "slow"
+        }
+      }
+    ]
+  }
+}
