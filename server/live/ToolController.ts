@@ -1,3 +1,4 @@
+import { hasPracticeCompletionCue } from './practiceCompletion';
 import type { MovementSequence } from '../../src/shared/contracts';
 import type { AssessmentPlan } from '../../src/shared/assessment';
 import type { LiveAction } from '../../src/live/protocol';
@@ -116,6 +117,7 @@ export class ToolController {
       if (call.args !== undefined && (!isRecord(call.args) || !hasOnlyKeys(call.args, []))) return { ok: false, message: 'Unexpected practice arguments.' };
       const inputError = this.inputOpen || !this.utterance.trim() ? await this.waitForInput(call.id!) : null;
       if (inputError) return inputError;
+      if (call.name === 'finish_practice' && !hasPracticeCompletionCue(this.utterance)) return { ok: false, message: 'Wait for the user to say they are done or request a review. Camera context cannot finish practice.' };
       if (!this.sequence || !this.assessment?.checks.length || this.usedPractice) return { ok: false, message: 'No assessable movement or practice request already handled. Wait for a new user request.' };
       this.usedPractice = true;
       await this.options.apply({ type: call.name }, new AbortController().signal);
