@@ -179,23 +179,26 @@ export function LiveCoachScreen() {
   }
   const canPractice = session.sequence && session.playback?.status === 'completed' &&
     deriveFormPlan(session.sequence).has(session.sequence.steps.length - 1);
+  const connectionMarker = pending ? 'live-starting' : mode === 'live' ? 'live-connected' : mode === 'local' ? 'live-local-ready' : 'live-stopped';
+  const playbackMarker = !session.sequence ? 'idle' : !session.playback ? 'preparing' :
+    session.playback.status === 'playing' ? 'active' : session.playback.status;
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.top}>
+    <SafeAreaView style={styles.screen} testID="live-screen">
+      <View style={styles.top} testID={connectionMarker}>
         <Pressable accessibilityRole="button" onPress={() => void stop().then(() => router.back())} style={styles.smallButton}><Text style={styles.buttonText}>Back</Text></Pressable>
-        <Text style={styles.title}>Live coach</Text>
-        <Pressable accessibilityRole="button" onPress={() => void stop()} style={styles.smallButton}><Text style={styles.buttonText}>End coach</Text></Pressable>
+        <Text style={styles.title} testID={`live-playback-${playbackMarker}`}>Live coach</Text>
+        <Pressable testID="live-end" accessibilityRole="button" onPress={() => void stop()} style={styles.smallButton}><Text style={styles.buttonText}>End coach</Text></Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.note}>Live mode sends microphone audio and sampled camera images to the conversation provider. Pose checks run locally. Face the phone with your shoulders, elbows and ears visible.</Text>
         <Text style={styles.status} accessibilityLiveRegion="polite">{message}{planning ? '\nPlanning a validated demonstration…' : ''}</Text>
         {!mode && <View style={styles.row}>
-          <Pressable accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>{pending ? 'Preparing…' : 'Start live coach'}</Text></Pressable>
-          {__DEV__ && <Pressable accessibilityRole="button" disabled={pending} onPress={() => void start('local')} style={styles.button}><Text style={styles.buttonText}>Test devices locally</Text></Pressable>}
+          <Pressable testID="live-start" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>{pending ? 'Preparing…' : 'Start live coach'}</Text></Pressable>
+          {__DEV__ && <Pressable testID="live-local-start" accessibilityRole="button" disabled={pending} onPress={() => void start('local')} style={styles.button}><Text style={styles.buttonText}>Test devices locally</Text></Pressable>}
         </View>}
         {mode && <>
-          <View style={styles.camera}>
+          <View style={styles.camera} testID="live-camera">
             <CameraPoseView onFrame={onPose} onCameraImage={image => {
               counters.current.images++;
               if (Date.now() - image.observedAt < 2000) client.current?.send({ type: 'image', data: image.data, observedAt: image.observedAt });
@@ -213,18 +216,18 @@ export function LiveCoachScreen() {
         {session.sequence && <>
           <Text style={styles.note}>{session.playback ? `Step ${session.playback.stepIndex + 1} · ${session.playback.phase} · ${session.playback.status}` : 'Preparing demonstration…'}</Text>
           <View style={styles.row}>
-            <Pressable accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Clear movement</Text></Pressable>
+            <Pressable testID={session.paused ? 'live-resume' : 'live-pause'} accessibilityRole="button" onPress={() => control(session.paused ? 'resume_movement' : 'pause_movement')} style={styles.button}><Text style={styles.buttonText}>{session.paused ? 'Resume movement' : 'Pause movement'}</Text></Pressable>
+            <Pressable testID="live-clear" accessibilityRole="button" onPress={() => control('stop_movement')} style={styles.button}><Text style={styles.buttonText}>Clear movement</Text></Pressable>
             {!!canPractice && <Pressable accessibilityRole="button" onPress={() => setPracticeStartedAt(Date.now())} style={styles.button}><Text style={styles.buttonText}>Check final goalpost position</Text></Pressable>}
           </View>
         </>}
         {mode === 'live' && <View style={styles.panel}>
-          <TextInput accessibilityLabel="Live text request" style={styles.input} multiline value={text} onChangeText={setText} />
-          <Pressable accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => { if (!pending && text.trim()) client.current?.send({ type: 'text', text }); }} style={styles.button}><Text style={styles.buttonText}>Send text to live coach</Text></Pressable>
+          <TextInput testID="live-request" accessibilityLabel="Live text request" style={styles.input} multiline value={text} onChangeText={setText} />
+          <Pressable testID="live-send" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => { if (!pending && text.trim()) client.current?.send({ type: 'text', text }); }} style={styles.button}><Text style={styles.buttonText}>Send text to live coach</Text></Pressable>
         </View>}
         {mode === 'local' && <View style={styles.row}>
           <Pressable accessibilityRole="button" onPress={() => audio.current?.testSpeaker()} style={styles.button}><Text style={styles.buttonText}>Test speaker tone</Text></Pressable>
-          <Pressable accessibilityRole="button" onPress={() => {
+          <Pressable testID="live-local-reference" accessibilityRole="button" onPress={() => {
             const reference = createWallAngelReference(wallAngelDefaults, `local-reference-${Date.now()}`);
             const last = reference.steps.at(-1)!; if ('parallel' in last) last.holdSeconds = 2;
             const checked = session.acceptSequence(reference); if (!checked.ok) setMessage(checked.error);

@@ -1,0 +1,53 @@
+{
+  "counts": {
+    "pass": 5,
+    "fail": 0,
+    "unsupported": 1
+  },
+  "exitCode": 0,
+  "outcome": "pass",
+  "checks": [
+    {
+      "name": "app_launch",
+      "required": true,
+      "status": "pass",
+      "durationMs": 5977
+    },
+    {
+      "name": "local_controls_cleanup",
+      "required": true,
+      "status": "pass",
+      "durationMs": 11574
+    },
+    {
+      "name": "live_connection_playback",
+      "required": true,
+      "status": "pass",
+      "durationMs": 25205
+    },
+    {
+      "name": "diagnostic_camera_frames_restart",
+      "required": true,
+      "status": "pass",
+      "durationMs": 1667
+    },
+    {
+      "name": "pose_frame_arrival",
+      "required": false,
+      "status": "unsupported",
+      "reason": "No landmark frames observed. A virtual/no-person feed cannot verify human pose arrival."
+    },
+    {
+      "name": "final_cleanup",
+      "required": true,
+      "status": "pass",
+      "durationMs": 1283
+    }
+  ],
+  "manualReview": [
+    "Avatar deformation and animation/layout appearance",
+    "Real camera/audio quality, audible speech and physical-device sustained performance"
+  ],
+  "environment": "Android 17 / API 37 emulator; real configured providers; silent virtual microphone and no-person virtual camera",
+  "date": "2026-11-15"
+}

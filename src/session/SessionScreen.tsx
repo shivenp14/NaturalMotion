@@ -11,7 +11,7 @@ export function SessionScreen() {
   const active = usePathname() === '/';
   const { phase, sequence, catalog, paused, playback, setPaused, recordPlayback, reset } = useSession();
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} testID="session-screen">
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.wordmark}>NaturalMotion</Text>

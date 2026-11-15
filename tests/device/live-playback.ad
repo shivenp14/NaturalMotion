@@ -1,0 +1,21 @@
+context platform=android
+open "${APP_ID}" "${LIVE_URL}"
+wait 'id="live-stopped"' 15000
+scroll up --until 'id="live-start"'
+press 'id="live-start"'
+wait 'id="live-connected"' 20000
+scroll down --until 'id="live-request"'
+fill 'id="live-request"' "Demonstrate one wall angel: five seconds up, hold for one second, five seconds back, and finish at goalpost."
+press 'id="live-send"'
+wait 'id="live-playback-active"' 30000
+scroll up --until 'id="live-pause"'
+press 'id="live-pause"'
+wait 'id="live-playback-paused"' 5000
+press 'id="live-resume"'
+wait 'id="live-playback-active"' 5000
+wait 'id="live-playback-completed"' 30000
+press 'id="live-clear"'
+wait 'id="live-playback-idle"' 5000
+press 'id="live-end"'
+wait 'id="live-stopped"' 15000
+wait absent 'id="live-camera"' 5000

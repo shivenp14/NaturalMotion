@@ -105,11 +105,14 @@ When connecting a physical phone to a laptop service, use a reachable LAN addres
 ```bash
 npm run check             # lint, typecheck, contract tests
 npm run export:android    # verify Android JavaScript bundling; not a native APK build
+npm run test:device       # requires a device_open-bound command; see device smoke guide
 npx expo install --check  # verify SDK dependency versions
 npx expo-doctor           # project diagnostics
 ```
 
 CI runs checks and the Android JavaScript export. Native compilation and Android 17 device verification remain separate checks.
+
+Reusable device verification covers live controls, connection, validated playback, cleanup and diagnostic camera arrival. See [device smoke commands and limits](docs/DEVICE_SMOKE_TESTS.md); `npm run check:device` combines regressions and device checks when the documented environment is configured.
 
 At scaffold handoff, lint, both TypeScript checks, all six contract tests, Android JavaScript export, and all 20 Expo Doctor checks passed. A native APK has not been built or installed on the presentation phone.
 

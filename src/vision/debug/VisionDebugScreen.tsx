@@ -43,6 +43,7 @@ export function VisionDebugScreen() {
   const [fps, setFps] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [frameCount, setFrameCount] = useState(0);
+  const [cameraFrameCount, setCameraFrameCount] = useState(0);
   const [cameraGeneration, setCameraGeneration] = useState(0);
   const [trackingLost, setTrackingLost] = useState(false);
   const lastFrameTimestamp = useRef<number | null>(null);
@@ -82,6 +83,7 @@ export function VisionDebugScreen() {
     lastFrameTimestamp.current = null;
     setSnapshot(null);
     setFrameCount(0);
+    setCameraFrameCount(0);
     setTrackingLost(false);
     setReady(null);
     setFps(null);
@@ -97,7 +99,7 @@ export function VisionDebugScreen() {
   if (!__DEV__) return null;
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} testID="vision-debug-screen">
       <View style={styles.camera}>
         <CameraPoseView
           key={cameraGeneration}
@@ -106,13 +108,14 @@ export function VisionDebugScreen() {
           onReady={setReady}
           onPerformance={setFps}
           onError={setError}
+          onCameraImage={() => setCameraFrameCount(count => count + 1)}
         />
       </View>
 
       <ScrollView style={styles.panel} contentContainerStyle={styles.panelContent}>
         <View style={styles.row}>
           <Text style={styles.eyebrow}>VISION DEBUG · NOT A SESSION</Text>
-          <Pressable accessibilityRole="button" onPress={reset}>
+          <Pressable testID="vision-restart" accessibilityRole="button" onPress={reset}>
             <Text style={styles.reset}>Restart camera</Text>
           </Pressable>
         </View>
@@ -131,6 +134,12 @@ export function VisionDebugScreen() {
           {fps !== null ? ` · measured ${fps.toFixed(0)} fps` : ''}
           {` · ${frameCount} frames`}
         </Text>
+
+        <Text style={styles.muted} testID={`vision-camera-${cameraFrameCount > 0 ? 'arrived' : 'pending'}-${cameraGeneration}`}>
+          {`Local camera samples: ${cameraFrameCount}`}
+        </Text>
+        <Text style={styles.muted} testID="vision-pose-status">{`Pose frames: ${frameCount}`}</Text>
+        {frameCount > 0 && <Text style={styles.muted} testID="vision-pose-arrived">Pose landmarks received.</Text>}
 
         {error && <Text style={styles.error}>{error}</Text>}
 

@@ -51,7 +51,9 @@
     "server": "node --env-file-if-exists=server/.env --import tsx server/index.ts",
     "test:agent": "node --import tsx scripts/agentSmoke.ts",
     "postinstall": "node scripts/patch-pose-android.cjs",
-    "test:live": "node --import tsx scripts/liveSmoke.ts"
+    "test:live": "node --import tsx scripts/liveSmoke.ts",
+    "test:device": "node --import tsx scripts/deviceSmoke.ts",
+    "check:device": "npm run check && npm run test:device"
   },
   "private": true
 }

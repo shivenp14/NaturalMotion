@@ -17,7 +17,7 @@ The live coach stops media on route blur. The diagnostic camera is active only w
 
 ## Merge preparation verification
 
-- `npm run check`: lint, both TypeScript checks and all 114 tests pass.
+- `npm run check`: lint, both TypeScript checks and all 117 tests pass, including device-runner result/failure-artifact regression tests.
 - `npm run export:android`: passes with the diagnostic route included.
 - The installed native pose patch passes its version/hash verification unchanged.
 - Android 17 emulator: diagnostic feed opens, Restart camera works, live local media counters advance, navigating to diagnostics releases live media, and system Back returns to the stopped live screen. The virtual feed contains no person, so it cannot validate human pose accuracy.
@@ -26,6 +26,8 @@ The live coach stops media on route blur. The diagnostic camera is active only w
 Outstanding PR review findings were checked against the current code. Fixes cover waiting-tool cancellation, final transcript qualifiers, flushing startup playback context, minimum demonstration holds, HTTP body deadlines, supported HTTP payload fields, terminal action ordering, legacy voice shutdown/restart and preflight control capabilities. Repeated live shutdowns retain the same native cleanup barrier; startup text submission is disabled; provider completion events are suppressed while tool calls are pending, including calls in the same provider message. Model overrides may omit the reasoning parameter; the default GPT-6 Luna setting remains low. Budget exhaustion is identified explicitly and reasoning-enabled legacy responses have a larger output allowance. Historical latency evidence remains a small typed-input sample; physical-phone acceptance is still separate.
 
 Neither PR #14 nor PR #15 was merged into main by this work. The current branch includes #14's head as an ancestor and is based on the latest fetched main. Shiven should review PR #15's current checks and merge it manually when ready.
+
+Reusable device checks are now available through `npm run test:device` and `npm run check:device`; see [DEVICE_SMOKE_TESTS.md](DEVICE_SMOKE_TESTS.md). The full real-provider Android emulator run passed all five required checks, with pose-landmark arrival explicitly unsupported on its virtual no-person feed. Camera-image arrival/restart passed. This automation does not replace manual avatar/layout or physical camera/audio quality review.
 
 The new route reuses the previously compiled native patch; it introduces no native/dependency changes. Run `npm run check` and `npm run export:android`, then smoke-test `naturalmotion://vision-debug`, camera restart, navigation back to the live coach, and live media start/end on Android. Phone-only audio/performance acceptance remains documented separately. Shoulder/armpit refinement remains deferred to optional issue #11, and PR #13's expanded controls are not part of this integration.
 
