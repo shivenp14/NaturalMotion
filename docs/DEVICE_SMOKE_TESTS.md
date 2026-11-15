@@ -28,7 +28,7 @@ AGENT_DEVICE_METRO_URL=http://127.0.0.1:8083 \
 npm run check:device
 ```
 
-Ordinary CI keeps running `npm run check` and `npm run export:android`; it does not silently launch a device or consume provider credits. The full device suite sends one synthetic text request to the actual configured Gemini/OpenAI path. Local mode uses the clearly labeled authored reference and sends no media to providers.
+Ordinary CI keeps running `npm run check` and `npm run export:android`; it does not silently launch a device or consume provider credits. The full device suite uses the explicitly labeled development **Test live requests with text** mode and sends one text request to the actual configured Gemini/OpenAI path. Native microphone capture remains local in this mode, preventing ambient speech from replacing the scripted text request; camera images and provider responses remain real. Normal **Start live coach** still streams microphone input. This typed test does not establish hands-free speech quality. Local mode uses the clearly labeled authored reference and sends no media to providers.
 
 ## What the cases prove
 
@@ -36,7 +36,7 @@ Ordinary CI keeps running `npm run check` and `npm run export:android`; it does 
 | --- | --- |
 | App launch | Selected development client launches; optional Metro cold-load landmark appears. |
 | Local controls and cleanup | Local media starts; an authored validated reference reaches renderer playback; repeated End requests finish cleanup; camera view disappears; media can restart and stop. |
-| Live connection and playback | App connects to configured providers; a generated movement reaches the renderer; pause/resume states are reported; playback completes; Clear removes the sequence; End finishes cleanup. |
+| Live connection and playback | App connects to configured providers; a generated movement reaches the renderer; pause/resume states are reported; playback completes; the final-goalpost button enters practice while the session stays connected; Clear removes the sequence; End finishes cleanup. |
 | Diagnostic camera | Local sampled camera images arrive, camera restart creates a new generation, and images arrive from that generation. Images stay local in diagnostics. |
 | Pose arrival | A native landmark frame is observed, or explicitly unsupported when none is observed. This does not assess pose accuracy. |
 | Final cleanup | The live route returns to its stopped state after diagnostics. |

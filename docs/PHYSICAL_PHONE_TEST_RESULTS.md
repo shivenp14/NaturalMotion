@@ -24,3 +24,13 @@ Failure diagnostics and the final machine-readable summary remain local under ig
 ## Remaining manual acceptance
 
 Actual speech from movement distance, audible response quality/volume, echo and follow-up turns; a supported spoken modification; visible goalpost issue/adjustment and occlusion/recovery; manual avatar/layout review; background/return; and three consecutive complete presentation runs. The automated typed request does not establish these qualities. Output buffering changed, so assess audible responsiveness on this phone rather than reusing earlier host timings as a phone measurement.
+
+## Subsequent manual test and controlled recheck
+
+The user heard contradictory wall/equipment refusals around a successful animation, then saw “Audio playback fell behind or received invalid PCM” after starting goalpost practice. The app process remained alive. The old combined error did not identify which audio guard fired; approaching the camera was not established as the cause.
+
+The follow-up changes introduce quiet planning, result-grounded visual cues, explicit support for wall-free on-screen illustrations and an English default. Audio overload now discards the current reply with a visible warning while preserving camera/microphone/session state; malformed PCM remains a separate error, with diagnostic queue counters. The buffer bound is retained.
+
+Full-microphone automation also captured incidental speech that interrupted its typed request. The explicitly labeled development live-text mode now keeps native microphone capture local during this scripted case. This does not replace the real voice test.
+
+The resulting phone suite passed **5 checks, 0 failed, 1 unsupported** and explicitly entered goalpost practice after generated playback. No person was tracked, so real form correctness/recovery remains unverified. Logs are local under `.expo/device-smoke/quiet-practice-textmode/`. A real-provider wall-free request generated a validated sequence with no assistant transcript before acceptance and then “Watch the movement on screen.” All 123 regression tests and Android export pass.

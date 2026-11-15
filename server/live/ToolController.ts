@@ -9,7 +9,6 @@ type Options = {
   plan(utterance: string, interpretation: string, current: MovementSequence | null, signal: AbortSignal): Promise<MovementPlan>;
   apply(action: LiveAction, signal: AbortSignal): Promise<void>;
   onPlanning(active: boolean): void;
-  onPlanStarted?(callId: string): void;
 };
 
 /** Server-owned action limits. Seeing another camera frame never creates a planning budget. */
@@ -119,7 +118,6 @@ export class ToolController {
     const timeout = setTimeout(() => abort.abort(), 25000);
     this.options.onPlanning(true);
     try {
-      this.options.onPlanStarted?.(call.id!);
       const plan = await this.options.plan(this.utterance, call.args.request, this.sequence, abort.signal);
       if (abort.signal.aborted || generation !== this.generation || this.closed) return { ok: false, message: 'Planning was cancelled.' };
       if (!plan.sequence) return { ok: false, message: plan.message || 'No supported demonstration was generated.' };

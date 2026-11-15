@@ -94,7 +94,7 @@ export function LiveCoachScreen() {
     return () => clearInterval(timer);
   }, [mode, evaluate]);
 
-  async function start(nextMode: 'live' | 'local') {
+  async function start(nextMode: 'live' | 'local', streamMicrophone = true) {
     if (pending || mode || Platform.OS !== 'android') return;
     const run = ++epoch.current;
     setPending(true); setMessage(nextMode === 'live' ? 'Connecting the live coach…' : 'Preparing a local devices test…');
@@ -141,6 +141,7 @@ export function LiveCoachScreen() {
             if (run !== epoch.current || !mounted.current) return;
             if (event.type === 'audio') audio.current?.enqueue(event.data);
             if (event.type === 'interrupted') audio.current?.interrupt();
+            if (event.type === 'turn_complete') audio.current?.finishReply();
             if (event.type === 'planning') setPlanning(event.active);
             if (event.type === 'transcript') setTurns(previous => {
               const last = previous.at(-1);
@@ -158,11 +159,14 @@ export function LiveCoachScreen() {
       await driver.start((data, peak) => {
         if (run !== epoch.current) return;
         counters.current.microphone++; counters.current.peak = peak;
-        client.current?.send({ type: 'audio', data });
-      }, error => { if (run === epoch.current) void stop(error); });
+        if (streamMicrophone) client.current?.send({ type: 'audio', data });
+      }, error => { if (run === epoch.current) void stop(error); }, warning => {
+        if (run === epoch.current && mounted.current) setMessage(warning);
+      });
       if (run === epoch.current && mounted.current) setMessage(nextMode === 'local'
         ? 'Local devices test. Audio and images stay on this phone. The speaker button plays a test tone.'
-        : 'Live camera and microphone connected. Ask for a demonstration.');
+        : streamMicrophone ? 'Live camera and microphone connected. Ask for a demonstration.'
+          : 'Live text test. Camera and providers are connected; microphone input stays local so speech cannot interrupt typed requests.');
     } catch (error) {
       if (run === epoch.current) await stop(error instanceof Error ? error.message : 'Could not start the live coach.');
     } finally { if (run === epoch.current && mounted.current) setPending(false); }
@@ -193,10 +197,11 @@ export function LiveCoachScreen() {
       </View>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.note}>Live mode sends microphone audio and sampled camera images to the conversation provider. Pose checks run locally. Face the phone with your shoulders, elbows and ears visible.</Text>
-        <Text style={styles.status} accessibilityLiveRegion="polite">{message}{planning ? '\nPlanning a validated demonstration…' : ''}</Text>
+        <Text style={styles.status} accessibilityLiveRegion="polite">{planning ? 'Preparing your movement…' : message}</Text>
         {!mode && <View style={styles.row}>
           <Pressable testID="live-start" accessibilityRole="button" disabled={pending} accessibilityState={{ disabled: pending }} onPress={() => void start('live')} style={styles.button}><Text style={styles.buttonText}>{pending ? 'Preparing…' : 'Start live coach'}</Text></Pressable>
           {__DEV__ && <Pressable testID="live-local-start" accessibilityRole="button" disabled={pending} onPress={() => void start('local')} style={styles.button}><Text style={styles.buttonText}>Test devices locally</Text></Pressable>}
+          {__DEV__ && <Pressable testID="live-text-test-start" accessibilityRole="button" disabled={pending} onPress={() => void start('live', false)} style={styles.button}><Text style={styles.buttonText}>Test live requests with text</Text></Pressable>}
         </View>}
         {mode && <>
           <View style={styles.camera} testID="live-camera">
@@ -213,7 +218,7 @@ export function LiveCoachScreen() {
         </>}
         <AnatomyViewport sequence={session.sequence} paused={session.paused}
           onPlaybackChange={session.recordPlayback} showLab={false} compact />
-        <Text style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
+        <Text testID={`live-form-${report?.mode ?? 'none'}`} style={styles.status}>{report ? `${report.mode === 'practice' ? 'Practice · ' : ''}${report.message}` : 'No active form check.'}</Text>
         {session.sequence && <>
           <Text style={styles.note}>{session.playback ? `Step ${session.playback.stepIndex + 1} · ${session.playback.phase} · ${session.playback.status}` : 'Preparing demonstration…'}</Text>
           <View style={styles.row}>
