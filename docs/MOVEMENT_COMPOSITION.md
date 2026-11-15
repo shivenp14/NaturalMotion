@@ -20,14 +20,15 @@ Legacy single-command sequences remain compatible. Use `getStepCommands(step)` w
 
 ## Renderer vocabulary — implemented, not registered with the agent yet
 
-- Shoulder elevation, separately addressable on the left/right.
-- Shoulder external rotation, separately addressable on the left/right.
-- Elbow flexion, separately addressable on the left/right.
-- Pose holding, expressed by the group's `holdSeconds` rather than a joint-writing command.
+The preview now exposes 24 upper-body channels: nine per arm (elevation, elbow flexion,
+shoulder rotation, arm direction, shrug, reach, forearm rotation, wrist flexion and wrist
+deviation), plus torso and neck flexion/rotation/side bend. Finger and lower-body controls
+are excluded. See [upper-body controls](UPPER_BODY_CONTROLS.md) for IDs, authored bounds,
+composition budgets, rig mappings, the phone lab and verification limits.
 
-`upperBodyPreviewCatalog` exposes `left_` and `right_` variants of `shoulder_elevation`, `elbow_flexion` and `shoulder_external_rotation`. Every command takes explicit `fromDeg` and `toDeg`. Rendering bounds are elevation 90–150, elbow flexion 20–90 and shoulder rotation 80–100. Elevation plus elbow flexion must stay within 140–190 for each arm. These are authored rendering coordinates, not clinical goniometry: shoulder rotation 90 is the calibrated goalpost reference, with only a small offset currently supported. Scapula/clavicle motion is derived by the rig coordinator, not supplied by the agent.
-
-Commands may omit channels to retain their previous values. A one-sided motion is executable independently; the engine does not dispatch by an exercise ID. Metadata lists only represented educational muscle regions. Camera view remains `unconfigured`, with no landmarks or form checks claimed until Derrick supplies them. The production catalog remains empty.
+Every command takes explicit `fromDeg` and `toDeg`. The existing six IDs remain compatible;
+programs still start at goalpost and omitted channels retain their values. Arms-down is now an
+executable target. The production catalog remains empty, and camera metadata stays unconfigured.
 
 ## Wall angel as a reference sequence
 
@@ -56,7 +57,7 @@ Only supported rendering combinations execute. This remains an illustrative rig 
 
 `AnatomyViewport` accepts `sequence`, optional `paused`, and `onPlaybackChange`. It compiles/revalidates input before execution, displays an error for unsupported input, and gives an external sequence precedence over development controls. Each step's educational highlight codes come from its component metadata and side, rather than from agent-supplied activation claims. Manual focus resumes after sequence removal.
 
-Events use the existing shared `PlaybackState` shape: `preparing`, `moving`, `holding`, `returning`, then `completed`; status changes include pause/resume. Events emit only at phase, step or status changes, so `updatedAt` remains a phase-entry/freshness boundary rather than being refreshed on every frame. Decreasing total shoulder elevation classifies a step as `returning`; other transitions are `moving`. Completion holds the final pose. The caller should preserve the sequence object identity during ordinary UI updates and replace it when intentionally restarting/changing the program.
+Events use the existing shared `PlaybackState` shape: `preparing`, `moving`, `holding`, `returning`, then `completed`; status changes include pause/resume. Events emit only at phase, step or status changes, so `updatedAt` remains a phase-entry/freshness boundary rather than being refreshed on every frame. Decreasing normalized distance to the canonical initial pose classifies a step as `returning`; other transitions are `moving`. Completion holds the final pose. The caller should preserve the sequence object identity during ordinary UI updates and replace it when intentionally restarting/changing the program.
 
 Automated tests cover reference interpolation/holds, one-sided execution, side-specific highlighting, bad starts/unknown IDs/channel conflicts/cross-joint limits, real-rig mapping, preparation continuity and phase timestamps. `npm run check` passes all 26 tests; Android export succeeds. Android 17 Expo Go smoke testing verified composed playback, automatic component highlights, pause/resume, completion at goalpost and the development range/speed controls. Physical-phone performance and the full agent/camera/voice flow remain unverified.
 

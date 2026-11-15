@@ -1,24 +1,19 @@
 import type { ComponentDefinition, MovementCommand, MovementSequence, PlaybackState } from '../shared/contracts';
 import { validateSequence } from '../shared/validateSequence';
-import { initialUpperBodyPose, interpolateUpperBodyPose, upperBodyPoseError, type ArmPose, type UpperBodyPose } from './upperBodyPose';
+import { initialUpperBodyPose, cloneUpperBodyPose, interpolateUpperBodyPose, upperBodyPoseError, type UpperBodyPose } from './upperBodyPose';
 import { validateWallAngelParameters, type WallAngelParameters } from './wallAngel';
 import { getPartFocusCodes } from './regions';
 
-const axes = [
-  { id: 'shoulder_elevation', key: 'elevationDeg', minimum: 90, maximum: 150, regions: ['deltoid_lateral', 'trapezius_upper'] },
-  { id: 'elbow_flexion', key: 'elbowFlexionDeg', minimum: 20, maximum: 90, regions: ['biceps_brachii_short', 'triceps_long'] },
-  { id: 'shoulder_external_rotation', key: 'externalRotationDeg', minimum: 80, maximum: 100, regions: ['infraspinatus', 'deltoid_posterior'] },
-] as const;
-const bindings = (['left', 'right'] as const).flatMap((side) => axes.map((axis) => ({ ...axis, side, componentId: `${side}_${axis.id}` })));
+import { upperBodyControls } from './upperBodyControls';
 
 /** Executable rendering capabilities, not yet registered in the agent catalog. */
-export const upperBodyPreviewCatalog: readonly ComponentDefinition[] = bindings.map((binding) => ({
-  id: binding.componentId, label: `${binding.side} ${binding.id.replaceAll('_', ' ')}`,
+export const upperBodyPreviewCatalog: readonly ComponentDefinition[] = upperBodyControls.map((binding) => ({
+  id: binding.id, label: `${binding.group} ${binding.label}`,
   parameters: {
     fromDeg: { minimum: binding.minimum, maximum: binding.maximum },
     toDeg: { minimum: binding.minimum, maximum: binding.maximum },
   },
-  controlledChannels: [`${binding.side}.${binding.key}`], muscleRegionIds: binding.regions,
+  controlledChannels: [binding.channel], muscleRegionIds: binding.regions,
   // Vision metadata must come from Derrick; no checks are claimed here.
   cameraView: 'unconfigured', requiredLandmarks: [], supportedCheckIds: [],
 }));
@@ -35,19 +30,23 @@ function buildSegments(sequence: MovementSequence): UpperBodySegment[] {
   return sequence.steps.map((step) => {
     if (!('parallel' in step)) throw new Error('Upper-body execution requires timed parallel groups.');
     if (step.durationSeconds < 2 || step.durationSeconds > 5 || step.holdSeconds > 2) throw new Error('Timing exceeds the calibrated preview limits.');
-    const to = { left: { ...current.left }, right: { ...current.right } };
+    const to = cloneUpperBodyPose(current);
     const focusCodes = new Set<number>();
     for (const command of step.parallel) {
-      const binding = bindings.find((entry) => entry.componentId === command.componentId);
+      const binding = upperBodyControls.find((entry) => entry.id === command.componentId);
       if (!binding) throw new Error('Unimplemented upper-body component.');
-      if (Math.abs(command.parameters.fromDeg - current[binding.side][binding.key]) > 0.0001) throw new Error('Discontinuous movement start.');
-      to[binding.side][binding.key] = command.parameters.toDeg;
-      for (const code of getPartFocusCodes(binding.regions, binding.side)) focusCodes.add(code);
+      if (Math.abs(command.parameters.fromDeg - binding.read(current)) > 0.0001) throw new Error('Discontinuous movement start.');
+      binding.write(to, command.parameters.toDeg);
+      for (const side of binding.group === 'left' || binding.group === 'right' ? [binding.group] as const : ['left', 'right'] as const) {
+        for (const code of getPartFocusCodes(binding.regions, side)) focusCodes.add(code);
+      }
     }
     const error = upperBodyPoseError(to);
     if (error) throw new Error(error);
     // The constraints are convex; shared interpolation remains inside them.
-    const phase = to.left.elevationDeg + to.right.elevationDeg < current.left.elevationDeg + current.right.elevationDeg ? 'returning' : 'moving';
+    const distanceFromStart = (pose: UpperBodyPose) => upperBodyControls.reduce((sum, binding) =>
+      sum + Math.abs(binding.read(pose) - binding.neutral) / (binding.maximum - binding.minimum), 0);
+    const phase = distanceFromStart(to) < distanceFromStart(current) ? 'returning' : 'moving';
     const segment = { from: current, to, durationSeconds: step.durationSeconds, holdSeconds: step.holdSeconds, phase, focusCodes } as const;
     current = to;
     return segment;
@@ -91,15 +90,40 @@ export function sampleUpperBodyProgram(program: UpperBodyProgram, elapsedSeconds
 export function createWallAngelReference(parameters: WallAngelParameters, id: string): MovementSequence {
   validateWallAngelParameters(parameters);
   const initial = initialUpperBodyPose();
-  const topArm: ArmPose = { elevationDeg: parameters.topAngleDeg, elbowFlexionDeg: 20, externalRotationDeg: 90 };
-  const top = { left: { ...topArm }, right: { ...topArm } };
+  const top = cloneUpperBodyPose(initial);
+  for (const arm of [top.left, top.right]) {
+    arm.elevationDeg = parameters.topAngleDeg;
+    arm.elbowFlexionDeg = 20;
+  }
   function commands(from: UpperBodyPose, to: UpperBodyPose): MovementCommand[] {
-    return bindings.map((binding) => ({ componentId: binding.componentId, parameters: { fromDeg: from[binding.side][binding.key], toDeg: to[binding.side][binding.key] } }));
+    // Preserve the six-command reference, including constant shoulder rotation. New channels
+    // retain their neutral values rather than expanding the shared protocol's group limit.
+    return upperBodyControls.filter((binding) => /^(left|right)_(shoulder_elevation|elbow_flexion|shoulder_external_rotation)$/.test(binding.id))
+      .map((binding) => ({ componentId: binding.id, parameters: { fromDeg: binding.read(from), toDeg: binding.read(to) } }));
   }
   return { id, steps: [
     { parallel: commands(initial, top), durationSeconds: parameters.travelSeconds, holdSeconds: parameters.holdSeconds },
     { parallel: commands(top, initial), durationSeconds: parameters.travelSeconds, holdSeconds: 0 },
   ] };
+}
+
+/** Development pose round-trip through the same validator used for external sequences. */
+export function createUpperBodyPoseReference(target: UpperBodyPose, id: string): MovementSequence {
+  const error = upperBodyPoseError(target);
+  if (error) throw new Error(error);
+  const initial = initialUpperBodyPose();
+  const changed = upperBodyControls.filter((control) => control.read(target) !== control.read(initial));
+  if (changed.length === 0) throw new Error('Change an angle before playing the pose.');
+  if (changed.length > 12) throw new Error('Play up to 12 changed channels together; reset some angles first.');
+  const commands = (from: UpperBodyPose, to: UpperBodyPose) => changed.map((control) => ({
+    componentId: control.id, parameters: { fromDeg: control.read(from), toDeg: control.read(to) },
+  }));
+  const sequence: MovementSequence = { id, steps: [
+    { parallel: commands(initial, target), durationSeconds: 3, holdSeconds: 1 },
+    { parallel: commands(target, initial), durationSeconds: 3, holdSeconds: 0 },
+  ] };
+  compileUpperBodySequence(sequence);
+  return sequence;
 }
 
 /** Emits only boundaries/status changes; updatedAt is a phase-entry time. */

@@ -47,7 +47,7 @@ test('the compiler rejects unknown, conflicting, discontinuous and cross-joint-i
   assert.throws(() => compileUpperBodySequence(group([command('left_shoulder_elevation', 100, 110)])));
   assert.throws(() => compileUpperBodySequence(group([command('left_shoulder_elevation', 90, 145)])));
   assert.throws(() => compileUpperBodySequence(group([command('left_shoulder_elevation', 90, 95), command('left_shoulder_elevation', 90, 100)])));
-  assert.throws(() => compileUpperBodySequence(group([command('left_elbow_flexion', 90, 20)])));
+  assert.throws(() => compileUpperBodySequence(group([command('left_elbow_flexion', 90, 111)])));
   assert.throws(() => compileUpperBodySequence(group([command('left_shoulder_elevation', 90, 100)], { durationSeconds: 1 })));
   const discontinuous = createWallAngelReference(wallAngelDefaults, 'discontinuous');
   if ('parallel' in discontinuous.steps[1]) discontinuous.steps[1].parallel[0].parameters.fromDeg -= 1;

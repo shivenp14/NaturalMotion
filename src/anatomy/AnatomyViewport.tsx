@@ -7,6 +7,8 @@ import { anatomyFocusOptions, type AnatomyFocus, type AnatomyView } from './regi
 import { SceneCanvas } from './SceneCanvas';
 import { wallAngelDefaults, type WallAngelPreview } from './wallAngel';
 import { compileUpperBodySequence, createWallAngelReference } from './upperBodySequence';
+import { UpperBodyControlLab } from './UpperBodyControlLab';
+import { initialUpperBodyPose, type UpperBodyPose } from './upperBodyPose';
 
 export type AnatomyViewportProps = {
   sequence: MovementSequence | null;
@@ -34,6 +36,8 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
   const [preview, setPreview] = useState<WallAngelPreview>({ mode: 'rest', parameters: { ...wallAngelDefaults } });
   const [labSequence, setLabSequence] = useState<MovementSequence | null>(null);
   const [labPaused, setLabPaused] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [controlPose, setControlPose] = useState<UpperBodyPose | null>(null);
   const execution = useMemo(() => {
     const input = sequence ?? labSequence;
     if (!input) return { program: null, error: null };
@@ -47,11 +51,15 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
     onPlaybackChange?.(state);
   }, [sequence, onPlaybackChange]);
   function selectPose(mode: WallAngelPreview['mode']) {
+    setControlPose(null);
+    setControlsOpen(false);
     setLabSequence(null);
     setLabPaused(false);
     setPreview((current) => ({ ...current, mode }));
   }
   function playComposition() {
+    setControlPose(null);
+    setControlsOpen(false);
     if (labSequence && preview.mode !== 'completed') {
       setLabPaused((current) => !current);
       return;
@@ -96,6 +104,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
       <View style={styles.canvas} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
         <ModelBoundary>
           <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
+            pose={__DEV__ && !sequence ? controlPose : null}
             program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} />
           {!ready && (
             <View style={styles.loading} pointerEvents="none">
@@ -106,6 +115,24 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
         </ModelBoundary>
       </View>
       <View style={styles.controls}>
+        {__DEV__ && !sequence && <>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: controlsOpen }} style={styles.control}
+            onPress={() => {
+              setControlsOpen(!controlsOpen);
+              setControlPose(controlsOpen ? null : initialUpperBodyPose());
+              setLabSequence(null);
+              setLabPaused(false);
+              setPreview((current) => ({ ...current, mode: 'rest' }));
+            }}>
+            <Text style={styles.controlText}>{controlsOpen ? 'Close upper-body controls' : 'Explore upper-body controls'}</Text>
+          </Pressable>
+          {controlsOpen && <UpperBodyControlLab ready={ready} onPoseChange={(pose) => {
+            setControlPose(pose); setLabSequence(null); setLabPaused(false);
+          }} onPlay={(input) => {
+            setLabSequence(input); setLabPaused(false);
+            setPreview((current) => ({ ...current, mode: 'playing' }));
+          }} />}
+        </>}
         <View style={styles.row} accessibilityLabel="Body view">
           {(['front', 'back', 'side'] as const).map((option) => (
             <Pressable key={option} accessibilityRole="button" accessibilityState={{ selected: view === option }}
@@ -125,7 +152,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
           ))}
         </View>}
         <Text style={styles.caption}>Educational region focus · not a measurement of muscle activation</Text>
-        {__DEV__ && preview.mode !== 'rest' && <Text style={styles.caption}>Wall reference only · contact is not simulated. Preview angles are animation settings, not a recommended range.</Text>}
+        {__DEV__ && (controlPose || preview.mode !== 'rest') && <Text style={styles.caption}>Illustrative rig preview · contact is not simulated. Angles are animation settings, not a recommended range.</Text>}
         <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL('https://github.com/heatsy-app/heatsy-body-model').catch(() => {}); }}>
           <Text style={styles.credit}>Heatsy / Z-Anatomy / BodyParts3D · CC BY-SA 4.0</Text>
         </Pressable>
