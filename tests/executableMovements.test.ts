@@ -36,7 +36,7 @@ test('named selections and contextual edits preserve existing wall-angel behavio
   assert.equal(matchExecutableRequest('Yes.', 'Cat cow', catalog, null), null);
   assert.equal(matchExecutableRequest('Make it slower.', '', catalog, sequence), 'wall_angel');
   assert.equal(matchExecutableRequest("Let's do it without the wall.", '', catalog, sequence), 'wall_angel');
-  assert.equal(matchExecutableRequest("Let's do it without the wall.", 'Wall angel', catalog, null), null);
+  assert.equal(matchExecutableRequest("Let's do it without the wall.", 'Wall angel', catalog, null), 'wall_angel');
   assert.equal(validateExecutableFamily(sequence, 'wall_angel'), null);
   assert.ok(validateExecutableFamily({ ...sequence, steps: sequence.steps.slice(0, 1) }, 'wall_angel'));
 });
@@ -48,4 +48,14 @@ test('conversation inventory excludes unavailable choices and asks before a broa
   assert.match(instructions.join('\n'), /wait for the user to select/);
   assert.match(instructions.join('\n'), /no registered movement fits/);
   assert.match(capabilityConversationInstructions([])[0], /REGISTERED_EXECUTABLE_MOVEMENTS \[\]/);
+});
+
+test('natural spoken agreement selects only the supported movement identified in context', () => {
+  for (const utterance of ['Yes, please show me.', 'Yeah sure, lets do it.', 'Okay, can you show me how to do it?', 'Please show me that stretch.', 'Sure, that sounds good.', "Let's do it without the wall."]) {
+    assert.equal(matchExecutableRequest(utterance, 'Demonstrate a wall angel arm illustration.', catalog, null), 'wall_angel', utterance);
+    assert.equal(matchExecutableRequest(utterance, 'Demonstrate cat cow.', catalog, null), null);
+  }
+  for (const utterance of ['No, do not show me.', "Yes but don't start yet.", 'Sure, explain it before showing me.', 'What does that stretch do?', 'My lower back hurts from sitting.']) {
+    assert.equal(matchExecutableRequest(utterance, 'Wall angel', catalog, null), null, utterance);
+  }
 });

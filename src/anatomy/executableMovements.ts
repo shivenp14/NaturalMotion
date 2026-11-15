@@ -31,9 +31,13 @@ const unsupported = /\b(?:side[ -]?bend|lateral flexion|cat[ -]?cow|child'?s? po
 export function matchExecutableRequest(utterance: string, interpretation: string, catalog: readonly ComponentDefinition[], current: MovementSequence | null): ExecutableMovementId | null {
   if (!availableExecutableMovements(catalog).length || unsupported.test(utterance)) return null;
   if (name.test(utterance)) return 'wall_angel';
-  if (/^(?:yes|ok(?:ay)?|sure|go ahead|(?:show|do|try|demonstrate) (?:me )?(?:it|that|that one|the first one)|(?:the )?first(?: one)?|let'?s (?:do|try) (?:it|that|that one))[.!?\s]*$/i.test(utterance.trim())) {
-    return name.test(interpretation) && !unsupported.test(interpretation) ? 'wall_angel' : null;
-  }
+  // Spoken agreement often contains fillers and combined clauses, rather than
+  // the exact one-word answers accepted by the original selection gate.
+  const selection = utterance.toLowerCase().replace(/[’]/g, "'").replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const affirmative = /\b(?:yes|yeah|yep|sure|okay|ok|go ahead|let's|lets)\b/.test(selection);
+  const demonstration = /\b(?:show|demonstrate|try|do)\b/.test(selection) && /\b(?:me|it|that|one)\b/.test(selection);
+  const decliningOrQuestioning = /\b(?:no|not|don't|dont|do not|can't|cannot|won't|wait|stop|why|what|explain|before|later|tomorrow)\b/.test(selection);
+  if (!decliningOrQuestioning && (affirmative || demonstration) && name.test(interpretation) && !unsupported.test(interpretation)) return 'wall_angel';
   if (current && /\b(?:slower|faster|less range|smaller|gentler|more slowly|speed|range|without (?:a |the )?wall|wall[ -]free)\b/i.test(utterance) &&
     validateExecutableFamily(current, 'wall_angel') === null) return 'wall_angel';
   return null;
