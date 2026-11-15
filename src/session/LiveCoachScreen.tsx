@@ -16,6 +16,7 @@ import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { appendCleanup } from './cleanup';
 import { PracticeMotionDetector } from '../vision/practiceMotion';
+import { CallStage } from './CallStage';
 
 export function LiveCoachScreen() {
   const session = useSession();
@@ -204,20 +205,17 @@ export function LiveCoachScreen() {
     session.playback.status === 'playing' ? 'active' : session.playback.status;
 
   if (mode) return <SafeAreaView style={styles.callScreen} testID="live-screen">
-    <View style={styles.callStage} testID={connectionMarker}>
-      <View style={[styles.stageLayer, mainView === 'camera' ? styles.mainLayer : styles.callPreview]} testID="live-camera">
+    <CallStage mainView={mainView} connectionMarker={connectionMarker} camera={
         <CameraPoseView onFrame={onPose} onCameraImage={image => {
           counters.current.images++;
           if (Date.now() - image.observedAt < 2000) client.current?.send({ type: 'image', data: image.data, observedAt: image.observedAt });
         }} onError={(error, fatal) => { if (!fatal) setCameraWarning(error); else void stop(error); }} />
-      </View>
-      <View style={[styles.stageLayer, mainView === 'model' ? styles.mainLayer : styles.callPreview]} testID="live-model">
+      } model={
         <AnatomyViewport sequence={session.sequence} paused={session.paused} onPlaybackChange={session.recordPlayback} showLab={false} stage />
-      </View>
-      <Pressable testID="live-swap" accessibilityRole="button" accessibilityLabel={mainView === 'camera' ? 'Show anatomy model' : 'Show camera and start practice'} style={styles.previewTouch} onPress={() => {
+      } onSwap={() => {
         if (mainView === 'model') { setMainView('camera'); setPracticeDetected(true); if (canPractice) { const now = Date.now(); practice.current = now; setPracticeStartedAt(now); } }
         else setMainView('model');
-      }}><Text style={styles.callPreviewLabel}>{mainView === 'camera' ? 'Anatomy' : 'You'}</Text></Pressable>
+      }}>
       {planning && <View pointerEvents="none" style={styles.callStatus}><Text style={styles.statusText}>Preparing your demonstration…</Text></View>}
       {!!cameraWarning && <Text style={styles.warning} accessibilityRole="alert">{cameraWarning}</Text>}
       <View style={styles.callButtons}>
@@ -225,7 +223,7 @@ export function LiveCoachScreen() {
         <Pressable testID="live-end" accessibilityRole="button" accessibilityLabel="End conversation" onPress={() => void stop().then(() => router.back())} style={styles.roundButton}><Text style={styles.roundText}>×</Text></Pressable>
       </View>
       <Text testID={`live-playback-${playbackMarker}`} style={styles.hiddenMarker} accessibilityElementsHidden>{playbackMarker}</Text>
-    </View>
+    </CallStage>
   </SafeAreaView>;
 
   return <SafeAreaView style={styles.callScreen} testID="live-screen">
