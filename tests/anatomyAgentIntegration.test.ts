@@ -38,7 +38,9 @@ test('real anatomy catalog crosses HTTP and client validation, then compiles and
   assert.equal(program.segments.length, 2);
   const end = sampleUpperBodyProgram(program, program.durationSeconds);
   assert.equal(end.completed, true); assert.equal(end.pose.left.elevationDeg, 90);
-  assert.ok(capabilities.catalog.every(component => component.supportedCheckIds.length === 0 && component.cameraView === 'unconfigured'));
+  assert.equal(capabilities.catalog.filter(component => component.supportedCheckIds.length > 0).length, 2);
+  assert.ok(capabilities.catalog.filter(component => component.supportedCheckIds.length > 0)
+    .every(component => component.id.endsWith('shoulder_elevation') && component.cameraView === 'front'));
 });
 
 test('renderer constraints reject structurally valid but unsupported provider movements', async () => {

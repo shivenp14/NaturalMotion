@@ -1,9 +1,10 @@
 import { initialUpperBodyPose } from './upperBodyPose';
-import { upperBodyPreviewCatalog, validateUpperBodyComposition } from './upperBodySequence';
+import { validateUpperBodyComposition } from './upperBodySequence';
+import { coachingCatalog } from '../vision/checks/registry';
 
-/** One trusted renderer configuration for the backend, session and client. No vision support is implied. */
+/** Shared executable capabilities with explicitly conditional vision-check metadata. */
 export const anatomyAgentCapabilities = {
-  catalog: upperBodyPreviewCatalog,
+  catalog: coachingCatalog,
   compositionPolicy: validateUpperBodyComposition,
   allowPlaybackEdits: false,
   movementGuidance: {
@@ -19,6 +20,6 @@ export const anatomyAgentCapabilities = {
     coordination: 'For each arm, elevationDeg + elbowFlexionDeg must stay between 140 and 190, inclusive. Coordinate shoulder and elbow commands in the same group when needed.',
     continuity: 'Every new sequence starts at initialPose. Each fromDeg must equal that channel at the end of the previous group. Omitted channels retain their values. externalRotationDeg=90 is the authored baseline.',
     playback: 'To change speed or range, return a complete new play_sequence starting from initialPose. Step modification and indexed replay are not connected. Pause and stop are supported.',
-    observations: 'No camera checks are registered. Never report that the user performed a movement correctly or infer muscle activation.',
+    observations: 'Only a stationary bilateral goalpost hold (both arms elevation=90, elbowFlexion=90, externalRotation=90; hold at least 0.6 seconds; include shoulder elevation commands) has a verified elbow-height/spread check. All other phases have no form check. These are authored goalpost-pose semantics, not a conversion of rig angles to measured human angles. Never infer muscle activation or complete correct form.',
   },
 } as const;

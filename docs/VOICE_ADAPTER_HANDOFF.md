@@ -1,5 +1,7 @@
 # Native voice adapter handoff
 
+Current live integration and November 15 verification are documented in [LIVE_COACH_HANDOFF.md](LIVE_COACH_HANDOFF.md). The earlier diagnostic path and checkpoint below are retained for reference; physical-phone audio acceptance remains pending.
+
 Implemented from the supplied `naturalmotion-worker3-voice-adapter-local` draft, adapted to the current validated `AgentReturn` contracts. The supplied draft expected the older `{ speech, sequence? }` response; that format is not accepted.
 
 ## Installed integration
@@ -33,6 +35,6 @@ Then:
 
 ## Verification limits
 
-Automated tests use fake native drivers. `npm run check` verifies lint, TypeScript and lifecycle/contract tests; `npm run export:android` verifies JavaScript bundling. Neither proves native compilation, phone permissions, service availability, microphone/TTS timing, or combined camera/graphics performance. The native Android debug APK has built and installed successfully, and the user has confirmed audio capture works. The full live-agent loop and combined camera/graphics acceptance remain pending.
+Automated tests use fake native drivers. `npm run check` verifies lint, TypeScript and lifecycle/contract tests; `npm run export:android` verifies JavaScript bundling. Neither proves native compilation, phone permissions, service availability, microphone/TTS timing, or combined camera/graphics performance. The native Android debug APK has built and installed successfully, and the user has confirmed audio capture works. The live-provider and emulator camera/graphics path now passes; physical-phone live audio and sustained combined-load acceptance remain pending.
 
 References: https://docs.expo.dev/versions/v58.0.0/sdk/speech/ and https://github.com/jamsch/expo-speech-recognition

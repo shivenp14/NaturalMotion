@@ -5,8 +5,10 @@ import { theme } from '../ui/theme';
 import { useSession } from './SessionProvider';
 import { VoiceDevPanel } from '../voice/VoiceDevPanel';
 import { AgentDevPanel } from './AgentDevPanel';
+import { router, usePathname } from 'expo-router';
 
 export function SessionScreen() {
+  const active = usePathname() === '/';
   const { phase, sequence, catalog, paused, playback, setPaused, recordPlayback, reset } = useSession();
   return (
     <SafeAreaView style={styles.screen}>
@@ -19,9 +21,9 @@ export function SessionScreen() {
           <Text style={styles.title}>Make room{ '\n' }for movement.</Text>
           <Text style={styles.description}>Voice-guided movement, brought to life.</Text>
         </View>
-        {__DEV__ && <AgentDevPanel />}
+        {__DEV__ && active && <AgentDevPanel />}
         {/* Reset the lab on session entry/exit so clearing a session cannot resume an old lab animation. */}
-        <AnatomyViewport key={sequence ? 'session' : 'lab'} sequence={sequence} paused={paused} onPlaybackChange={recordPlayback} />
+        {active && <AnatomyViewport key={sequence ? 'session' : 'lab'} sequence={sequence} paused={paused} onPlaybackChange={recordPlayback} />}
         {__DEV__ && sequence && <View style={styles.development}>
           <Text style={styles.devText}>Sequence: {sequence.id} · {playback ? `Group ${playback.stepIndex + 1} · ${playback.phase} · ${playback.status}` : 'Preparing'}</Text>
           <Pressable accessibilityRole="button" onPress={() => setPaused(!paused)} style={styles.button}>
@@ -35,15 +37,15 @@ export function SessionScreen() {
           <View style={styles.dot} />
           <Text style={styles.description}>Your guide is getting ready</Text>
         </View>
-        <Pressable disabled accessibilityRole="button" accessibilityState={{ disabled: true }} style={styles.button}>
-          <Text style={styles.buttonText}>Begin session</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/live')} style={styles.button}>
+          <Text style={styles.buttonText}>Open live coach</Text>
         </Pressable>
-        <Text style={styles.note}>Sessions will be available when your movement guide is ready.</Text>
-        {__DEV__ && (
+        <Text style={styles.note}>Live coaching requires configured providers and a development build.</Text>
+        {__DEV__ && active && (
           <View style={styles.development}>
             <Text style={styles.devTitle}>DEVELOPMENT WORKSPACE</Text>
             <Text style={styles.devText}>Session: {phase} · Registered components: {catalog.length}</Text>
-            <Text style={styles.devText}>Validated agent sequences play on the anatomy model. Camera checks are not connected.</Text>
+            <Text style={styles.devText}>Validated agent sequences play on the anatomy model. Camera and supported pose checks are available in the live coach.</Text>
             <VoiceDevPanel />
           </View>
         )}

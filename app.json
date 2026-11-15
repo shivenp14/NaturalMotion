@@ -34,6 +34,23 @@
           "microphonePermission": "Allow NaturalMotion to hear your movement requests.",
           "speechRecognitionPermission": "Allow NaturalMotion to transcribe your speech."
         }
+      ],
+      [
+        "react-native-audio-api",
+        {
+          "iosMicrophonePermission": "Allow NaturalMotion to hear your movement requests.",
+          "androidPermissions": [
+            "android.permission.RECORD_AUDIO",
+            "android.permission.MODIFY_AUDIO_SETTINGS"
+          ]
+        }
+      ],
+      [
+        "react-native-pose-detection",
+        {
+          "model": "full",
+          "cameraPermissionText": "NaturalMotion tracks pose locally. During live coaching, sampled images are sent to the conversation provider."
+        }
       ]
     ]
   }

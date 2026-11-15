@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { generateAgentReturn, parseAgentRequest, RequestError, type AgentServiceOptions } from './agent';
 
 /** Local development service. Default bind is loopback; do not expose it publicly without authentication. */
-export function createAgentServer(options: AgentServiceOptions) {
+export function createAgentServer(options: AgentServiceOptions & { geminiApiKey?: string; conversationModel?: string }) {
   let active = 0;
   return createServer(async (req, res) => {
     const send = (status: number, body: unknown) => {
@@ -12,6 +12,10 @@ export function createAgentServer(options: AgentServiceOptions) {
     };
     if (req.method === 'GET' && req.url === '/health') {
       send(200, { ready: Boolean(options.apiKey), provider: 'openai' }); return;
+    }
+    if (req.method === 'GET' && req.url === '/live/health') {
+      send(200, { conversationConfigured: Boolean(options.geminiApiKey), plannerConfigured: Boolean(options.apiKey),
+        conversationModel: options.conversationModel ?? 'gemini-3.8-live', plannerModel: options.model }); return;
     }
     if (req.method !== 'POST' || req.url !== '/agent/respond') { send(404, { error: 'Not found.' }); return; }
     if (!options.apiKey) { send(503, { error: 'Agent provider is not configured.' }); return; }

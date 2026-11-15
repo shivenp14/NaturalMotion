@@ -74,7 +74,7 @@ export function AgentDevPanel() {
   return (
     <View style={styles.panel}>
       <Text style={styles.label}>AGENT → MOVEMENT TEST · DEVELOPMENT ONLY</Text>
-      <Text style={styles.note}>Six verified animation components. Camera checks are not connected. Use text and voice tests separately.</Text>
+      <Text style={styles.note}>Six verified animation components. Open the live coach for camera checks. Use text and voice tests separately.</Text>
       {!backendUrl && <Text style={styles.note}>Set EXPO_PUBLIC_API_BASE_URL to enable live requests.</Text>}
       <TextInput accessibilityLabel="Movement request" value={utterance} onChangeText={setUtterance}
         multiline editable={!busy} style={styles.input} placeholderTextColor={theme.muted} />

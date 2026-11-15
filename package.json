@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@google/genai": "^3.3.0",
     "@react-three/fiber": "^9.8.2",
     "expo": "~58.0.25",
     "expo-asset": "~58.0.21",
@@ -18,15 +19,19 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
+    "react-native-audio-api": "^1.0.0",
+    "react-native-pose-detection": "0.2.2",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-web": "^0.21.4",
-    "three": "^0.187.0"
+    "three": "^0.187.0",
+    "ws": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "~19.3.0",
     "@types/three": "^0.187.0",
+    "@types/ws": "^8.18.2",
     "eslint": "^9.39.5",
     "eslint-config-expo": "~58.0.4",
     "tsx": "^4.23.15",
@@ -44,7 +49,9 @@
     "check": "npm run lint && npm run typecheck && npm test",
     "export:android": "expo export --platform android",
     "server": "node --env-file-if-exists=server/.env --import tsx server/index.ts",
-    "test:agent": "node --import tsx scripts/agentSmoke.ts"
+    "test:agent": "node --import tsx scripts/agentSmoke.ts",
+    "postinstall": "node scripts/patch-pose-android.cjs",
+    "test:live": "node --import tsx scripts/liveSmoke.ts"
   },
   "private": true
 }

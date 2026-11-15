@@ -1,5 +1,7 @@
 # Agent and anatomy integration checkpoint
 
+Current live integration and November 15 verification are documented in [LIVE_COACH_HANDOFF.md](LIVE_COACH_HANDOFF.md). The earlier diagnostic path and checkpoint below are retained for reference; physical-phone audio acceptance remains pending.
+
 PR #12 was merged into `main` and `main` merged into `roland/voice-agent-foundations` for PR #15. This connects the movement and agent foundations without replacing the final UI work.
 
 ## Connected behavior
@@ -45,4 +47,4 @@ The combined APK is installed as `com.shivenp14.naturalmotion`. This session use
 
 Install a combined development APK containing both graphics and speech modules. Use a phone-reachable backend address instead of emulator-only `10.0.2.2`. Verify a spoken request from stretching distance, a correct transcript, an audible reply, listening resumption without recognizing its own TTS, and stop during a pending request. Then repeat with a generated sequence on the anatomical model. Do not run the text and voice test panels simultaneously.
 
-Agree with Derrick on observation/check metadata and with Shiven on executable movement semantics before claiming camera-based coaching. Full final UI, camera feedback and sustained combined-load performance remain later integration work. Issue #3 remains open pending its live movement-generation, phone audio and teammate handoff acceptance.
+Agree with Derrick on observation/check metadata and with Shiven on executable movement semantics before claiming camera-based coaching. Final UI, physical-phone camera/audio acceptance and sustained combined-load performance remain. Live movement generation is now verified; issue #3 remains open pending phone audio and teammate handoff acceptance.

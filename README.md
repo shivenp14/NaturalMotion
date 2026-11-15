@@ -11,7 +11,7 @@ An Android-first, hands-free movement coach with one anatomical model, parameter
 - Native recognition/TTS adapters, validated half-duplex turn coordination, and a development echo test.
 - Separate team workspaces, a shared session provider, development-build profiles, and CI checks.
 
-The app and backend now share six verified upper-body animation components and the renderer composition validator. The development text/voice paths can send accepted agent sequences to the anatomy model. The generic default catalog and camera-check/cue registries remain empty. PR #15 reports prior live provider access; live movement generation and physical-phone spoken-response acceptance still need verification. The final session button stays disabled while the full coaching flow is under construction. See [integration verification](docs/AGENT_ANATOMY_INTEGRATION.md).
+The live coach uses Gemini for audio/camera conversation and a separate OpenAI planner for validated movement composition. The renderer and conditional goalpost elbow check run deterministically. Real providers and Android 17 emulator playback are verified; physical-phone speech, audible responses and combined-load acceptance remain. See the [live coach setup and test evidence](docs/LIVE_COACH_HANDOFF.md).
 
 ## Quick start
 
@@ -24,15 +24,9 @@ npm ci
 npm run check
 ```
 
-### Fast shell preview
+### Native integration
 
-```bash
-npm run start:go
-```
-
-Open the QR code in an **SDK 58-compatible Expo Go** installation on Android. Keep the computer and phone on the same network. If the app-store Expo Go version does not match, use a matching Android client from Expo or the development-build path below. Expo Go is for this starter shell; future native pose/audio/graphics modules may require a custom build.
-
-For a browser-only shell preview, use `npm run web`. Browser success does not validate Android hardware integrations.
+Use an Android development build for the app. The camera, audio and anatomy modules require native code; Expo Go cannot run the integrated route. Browser preview does not validate these integrations.
 
 ### Android development build: preferred integration path
 
@@ -98,11 +92,11 @@ The fixture in `tests/contracts.test.ts` is synthetic test data. It is not a sup
 4. Register that component, implement the renderer and evaluator, then give the catalog to the agent.
 5. Connect voice, playback, and real observations on the Android phone before expanding coverage.
 
-Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and native voice packages are installed. Rebuild the development client with both sets of native modules and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md). Camera integration remains separate.
+Camera preview alone is not pose estimation. Do not assume `expo-camera` exposes the raw frame pipeline required by a chosen pose library. Use `npx expo install <package>` for dependencies and verify each native package against SDK 58 before committing to it. Graphics and native voice packages are installed. Rebuild the development client with both sets of native modules and follow the [voice handoff](docs/VOICE_ADAPTER_HANDOFF.md). The integrated live route shares one camera between pose processing and sampled images; see the [live handoff](docs/LIVE_COACH_HANDOFF.md).
 
 ## Configuration and secrets
 
-Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. The local backend uses OpenAI with server-only credentials; see the agent setup below.
+Use `.env.example` as the configuration reference. Local `.env` files are ignored. `EXPO_PUBLIC_*` values are public app configuration; never put long-lived model/speech API secrets there. The backend uses Gemini and OpenAI with server-only keys in `server/.env`. Both key/value pairs are sufficient; model settings have defaults. Set the public backend URL separately for Metro; see the [live setup](docs/LIVE_COACH_HANDOFF.md).
 
 When connecting a physical phone to a laptop service, use a reachable LAN address or HTTPS endpoint. `localhost` on the phone refers to the phone itself. Run `npm run server` for the local agent backend; see [agent setup](docs/AGENT_BACKEND_HANDOFF.md).
 

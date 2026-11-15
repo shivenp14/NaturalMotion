@@ -12,6 +12,8 @@ export type AnatomyViewportProps = {
   sequence: MovementSequence | null;
   onPlaybackChange?: (state: PlaybackState) => void;
   paused?: boolean;
+  showLab?: boolean;
+  compact?: boolean;
 };
 
 class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
@@ -27,7 +29,7 @@ class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   }
 }
 
-export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: AnatomyViewportProps) {
+export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false }: AnatomyViewportProps) {
   const [focus, setFocus] = useState<AnatomyFocus>('none');
   const [view, setView] = useState<AnatomyView>('front');
   const [ready, setReady] = useState(false);
@@ -66,7 +68,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
         <Text style={styles.eyebrow}>YOUR MOVEMENT GUIDE</Text>
         <Text style={styles.title}>Explore your anatomy</Text>
       </View>
-      {__DEV__ && !sequence && (
+      {__DEV__ && showLab && !sequence && (
         <View style={styles.lab}>
           <Text style={styles.label}>Movement lab · Wall angel</Text>
           <View style={styles.row}>
@@ -93,7 +95,7 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false }: 
           <Text style={styles.caption} accessibilityLiveRegion="polite">{preview.mode === 'completed' ? 'Composition complete · goalpost' : labSequence ? labPaused ? 'Paused at current pose' : 'Playing composed primitives' : preview.mode === 'rest' ? 'Original rest pose' : `${preview.mode[0].toUpperCase() + preview.mode.slice(1)} pose`} · rig proof</Text>
         </View>
       )}
-      <View style={styles.canvas} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
+      <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
         <ModelBoundary>
           <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
             program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} />

@@ -1,10 +1,10 @@
 # Agent backend and voice integration
 
-The backend connects text or recognized speech to a server-side OpenAI Responses API request. PR #15 reports a successful live provider request on its original branch. The merged anatomy integration is verified with a mocked provider; a live movement-generation request still needs server credentials in this checkout.
+The current live path uses Gemini conversation plus a separate OpenAI movement planner. Real-provider movement generation and Android emulator playback are verified; phone audio acceptance remains. See [live coach setup and evidence](LIVE_COACH_HANDOFF.md). The HTTP endpoint below remains a separate transcript diagnostic.
 
 ## Local setup
 
-Use Node 24. Copy `server/.env.example` to `server/.env` and configure `OPENAI_API_KEY` there. `OPENAI_MODEL` defaults to `gpt-6-astra`; select an available Responses/Structured Outputs model for your account. This file is ignored by Git. Never use an EXPO_PUBLIC variable for provider secrets.
+Use Node 24. Copy `server/.env.example` to `server/.env` and configure `OPENAI_API_KEY` there. For the live route also configure `GEMINI_API_KEY`; both keys are sufficient without other settings. `OPENAI_MODEL` defaults to `gpt-6-luna`; select an available Responses/Structured Outputs model for your account. This file is ignored by Git. Never use an EXPO_PUBLIC variable for provider secrets.
 
 Start the service:
 
@@ -26,7 +26,7 @@ The local service defaults to `127.0.0.1:3001`. For a physical phone, use a reac
 
 ## Current boundaries
 
-The app and server explicitly share `anatomyAgentCapabilities`: six verified left/right shoulder-elevation, elbow-flexion and shoulder-rotation components, plus `validateUpperBodyComposition`. The shared default catalog remains empty for unconfigured consumers. Cues and camera checks remain empty; the registered components do not claim form evaluation. The provider receives renderer-owned initial-pose, coordination, continuity and timing guidance. Every output still passes domain validation on the backend, client, session and renderer. Sequences follow Shiven’s `id`/`stepIndex`, catalog-defined numeric parameters, and simultaneous command groups; see [contract alignment](WORKER3_CONTRACTS.md). The server is stateless: each turn receives current sequence context, but no prior conversation transcript. Form-event explanations remain in the deterministic cue policy and are not accepted as arbitrary client observations by this transcript endpoint.
+The app and server explicitly share `anatomyAgentCapabilities`: six verified left/right shoulder-elevation, elbow-flexion and shoulder-rotation components, plus `validateUpperBodyComposition`. The shared default catalog remains empty for unconfigured consumers. The generic cue registry remains empty. Conditional shoulder metadata supports the verified goalpost elbow check in the live route; the HTTP transcript endpoint does not receive camera observations. The provider receives renderer-owned initial-pose, coordination, continuity and timing guidance. Every output still passes domain validation on the backend, client, session and renderer. Sequences follow Shiven’s `id`/`stepIndex`, catalog-defined numeric parameters, and simultaneous command groups; see [contract alignment](WORKER3_CONTRACTS.md). The HTTP endpoint is stateless: each turn receives current sequence context, but no prior conversation transcript. Form-event explanations remain in the deterministic cue policy and are not accepted as arbitrary client observations by this transcript endpoint.
 
 ## Acceptance
 
@@ -35,7 +35,7 @@ The app and server explicitly share `anatomyAgentCapabilities`: six verified lef
 3. Ask for an unsupported lower-body movement; confirm a clear limitation and no playback.
 4. Stop during an in-flight model request; confirm no late speech.
 5. Unavailable service, invalid response, timeout, and provider failures produce a visible error and stop listening.
-6. Use the development text panel to request a wall-angel demonstration. Confirm validated groups appear and the model plays to completion. Camera feedback remains a later integration.
+6. Use the development text panel to request a wall-angel demonstration. Confirm validated groups appear and the model plays to completion. Camera feedback is tested through the separate live route.
 7. On the presentation phone, repeat using speech, verify an audible response and automatic listening resumption, then stop/pause. Do not count displayed text as proof of audible TTS.
 
 Automated tests cover HTTP request handling, cancellation/timeouts, provider response/refusal handling, and schema/domain validation with a mocked provider. They do not demonstrate live provider access.

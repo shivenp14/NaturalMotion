@@ -48,9 +48,11 @@ The same catalog and policy must be configured at every boundary:
 - `createAgentServer` accepts server-owned `catalog`, `compositionPolicy`, and reviewed `cues` options. It never trusts client-supplied capability definitions or executable policy.
 - `AnatomyViewport` must independently revalidate at execution, as Shiven's branch already does.
 
-PR #12 is now merged into main and integrated here. `anatomyAgentCapabilities` configures Shiven's `upperBodyPreviewCatalog` and `validateUpperBodyComposition` together in the app root and server entrypoint. Do not substitute an unconditional-allow policy. The generic shared default catalog remains empty; the six explicit runtime components have no camera checks. The session passes accepted sequences to the renderer and stores phase/status reports. Indexed modification/replay are intentionally not advertised by this configured service; complete replacement sequences support movement changes.
+PR #12 is now merged into main and integrated here. `anatomyAgentCapabilities` configures the six upper-body components, conditional check metadata and `validateUpperBodyComposition` together in the app root and server entrypoint. Do not substitute an unconditional-allow policy. The generic shared default catalog remains empty; two shoulder components advertise a conditional goalpost elbow check, activated only when the deterministic sequence-derived profile supports it. The session passes accepted sequences to the renderer and stores phase/status reports. Indexed modification/replay are intentionally not advertised by this configured service; complete replacement sequences support movement changes.
 
 ## Feedback routing
+
+The live route uses `SequenceFormEvaluator` and reconstructs its approved status message on the backend; see [live feedback semantics](LIVE_COACH_HANDOFF.md). The legacy cue helpers below remain available separately.
 
 `getStepCommands` inspects either shape. The shared feedback gate accepts supported checks from any active group member and rejects mismatched/stale/future events. The agent's separate `CheckFeedbackDefinition` binds component/check IDs to approved cue IDs and agreed playback phases; its default registry is empty. The configured component must advertise the check, and its command must belong to the active step.
 
