@@ -246,6 +246,29 @@ test('elbows tucked to the body report needs_adjustment', () => {
   assert.equal(evaluateGoalpostArms(observe(tucked), playback)?.status, 'needs_adjustment');
 });
 
+test('elbows crossed in front of the chest do not count as spread', () => {
+  const crossed = {
+    ...cleanGoalpost,
+    leftElbow: { x: 0.5, y: 0.5 },
+    rightElbow: { x: 0.5, y: 0.5 },
+  };
+
+  const metrics = computeUpperBodyMetrics(observe(crossed));
+
+  assert.ok(metrics);
+  assert.ok(metrics.elbowSpread < 0);
+  assert.equal(evaluateGoalpostArms(observe(crossed), playback)?.status, 'needs_adjustment');
+});
+
+test('metrics refuse a joint below the visibility floor', () => {
+  const hidden = {
+    ...cleanGoalpost,
+    leftElbow: { x: 0.34, y: 0.5, visibility: 0.1 },
+  };
+
+  assert.equal(computeUpperBodyMetrics(observe(hidden)), null);
+});
+
 test('a joint the model cannot see reports not_observable, never aligned', () => {
   const hidden = {
     ...cleanGoalpost,

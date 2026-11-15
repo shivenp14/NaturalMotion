@@ -56,6 +56,8 @@ const distance = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
  * measurement, which the caller must report as `not_observable`, never as success.
  */
 export function computeUpperBodyMetrics(observation: PoseObservation): UpperBodyMetrics | null {
+  if (unobservableJoints(observation).length > 0) return null;
+
   const at = (name: VisionJointName): Point | null => observation.landmarks[name] ?? null;
   const leftShoulder = at('left_shoulder');
   const rightShoulder = at('right_shoulder');
@@ -71,8 +73,12 @@ export function computeUpperBodyMetrics(observation: PoseObservation): UpperBody
   if (shoulderWidth < 0.08) return null;
 
   const shoulderMidY = (leftShoulder.y + rightShoulder.y) / 2;
+  const midlineX = (leftShoulder.x + rightShoulder.x) / 2;
   const above = (elbow: Point) => (shoulderMidY - elbow.y) / shoulderWidth;
-  const outward = (shoulder: Point, elbow: Point) => Math.abs(elbow.x - shoulder.x) / shoulderWidth;
+  // Positive when the elbow sits further from the body midline than its own shoulder. A crossed
+  // arm goes negative here, which a bare |dx| would score as a wide spread.
+  const outward = (shoulder: Point, elbow: Point) =>
+    (Math.abs(elbow.x - midlineX) - Math.abs(shoulder.x - midlineX)) / shoulderWidth;
   const gap = (ear: Point, shoulder: Point) => (shoulder.y - ear.y) / shoulderWidth;
   const earToShoulder = Math.min(gap(leftEar, leftShoulder), gap(rightEar, rightShoulder));
   if (earToShoulder <= 0.05) return null;

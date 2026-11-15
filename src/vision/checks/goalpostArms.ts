@@ -50,7 +50,7 @@ export function evaluateGoalpostArms(
   };
 
   const missing = unobservableJoints(observation);
-  const metrics = missing.length === 0 ? computeUpperBodyMetrics(observation) : null;
+  const metrics = computeUpperBodyMetrics(observation);
   if (!metrics) {
     return {
       ...event,
