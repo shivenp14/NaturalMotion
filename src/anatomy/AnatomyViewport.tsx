@@ -3,7 +3,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'r
 import type { MovementSequence, PlaybackState } from '../shared/contracts';
 import { theme } from '../ui/theme';
 import { anatomyAppearance } from './appearance';
-import { anatomyFocusOptions, type AnatomyFocus, type AnatomyView } from './regions';
+import type { AnatomyView } from './regions';
 import { SceneCanvas } from './SceneCanvas';
 import { wallAngelDefaults, type WallAngelPreview } from './wallAngel';
 import { compileUpperBodySequence, createWallAngelReference } from './upperBodySequence';
@@ -18,7 +18,6 @@ export type AnatomyViewportProps = {
   compact?: boolean;
   automaticView?: AnatomyView;
   viewPreference?: AvatarViewPreference;
-  onViewPreferenceChange?: (view: AvatarViewPreference) => void;
 };
 
 class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
@@ -34,9 +33,7 @@ class ModelBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   }
 }
 
-export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false, automaticView, viewPreference, onViewPreferenceChange }: AnatomyViewportProps) {
-  const [focus, setFocus] = useState<AnatomyFocus>('none');
-  const [localView, setLocalView] = useState<AvatarViewPreference>('auto');
+export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, showLab = true, compact = false, automaticView, viewPreference = 'auto' }: AnatomyViewportProps) {
   const [viewTransition, setViewTransition] = useState({ view: 'front' as AnatomyView, settled: true });
   const [activeStep, setActiveStep] = useState({ sequenceId: '', index: 0 });
   const [ready, setReady] = useState(false);
@@ -49,12 +46,9 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
     try { return { program: compileUpperBodySequence(input), error: null }; }
     catch (error) { return { program: null, error: error instanceof Error ? error.message : 'Unsupported movement sequence.' }; }
   }, [sequence, labSequence]);
-  const preference = viewPreference ?? localView;
+  const preference = viewPreference;
   const index = activeStep.sequenceId === execution.program?.id ? activeStep.index : 0;
-  const view = preference === 'auto' ? automaticView ?? recommendedAvatarView(execution.program?.segments[index], focus) : preference;
-  function selectView(value: AvatarViewPreference) {
-    if (onViewPreferenceChange) onViewPreferenceChange(value); else setLocalView(value);
-  }
+  const view = preference === 'auto' ? automaticView ?? recommendedAvatarView(execution.program?.segments[index]) : preference;
   const onViewTransition = useCallback((next: AnatomyView, settled: boolean) => {
     setViewTransition(previous => previous.view === next && previous.settled === settled ? previous : { view: next, settled });
   }, []);
@@ -112,9 +106,9 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
           <Text style={styles.caption} accessibilityLiveRegion="polite">{preview.mode === 'completed' ? 'Composition complete · goalpost' : labSequence ? labPaused ? 'Paused at current pose' : 'Playing composed primitives' : preview.mode === 'rest' ? 'Original rest pose' : `${preview.mode[0].toUpperCase() + preview.mode.slice(1)} pose`} · rig proof</Text>
         </View>
       )}
-      <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${view} view. ${execution.program ? 'Educational component regions' : focus === 'none' ? 'Neutral gray' : focus.replace('_', ' ')} focus.`}>
+      <View style={[styles.canvas, compact && { height: 320 }]} accessibilityLabel={`Anatomical model, ${avatarViewLabels[view]} view. ${execution.program ? 'Educational component regions' : 'Neutral gray'}.`}>
         <ModelBoundary>
-          <SceneCanvas focus={focus} view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
+          <SceneCanvas focus="none" view={view} onReady={onReady} preview={__DEV__ && !sequence && !labSequence ? preview : undefined} onPreviewComplete={onPreviewComplete}
             program={execution.program} playbackPaused={sequence ? paused : labPaused} onPlaybackChange={onProgramPlayback} fixedFraming={!showLab} onViewTransition={onViewTransition} />
           {!ready && (
             <View style={styles.loading} pointerEvents="none">
@@ -125,25 +119,10 @@ export function AnatomyViewport({ sequence, onPlaybackChange, paused = false, sh
         </ModelBoundary>
       </View>
       <View style={styles.controls}>
-        <View style={styles.row} accessibilityLabel="Body view" testID={`anatomy-view-${view}-${viewTransition.view === view && viewTransition.settled ? 'settled' : 'rotating'}`}>
-          {(['auto', 'front', 'back', 'left_side', 'side'] as const).map((option) => (
-            <Pressable key={option} testID={`anatomy-view-${option}`} accessibilityRole="button" accessibilityState={{ selected: preference === option }}
-              onPress={() => selectView(option)} style={[styles.control, preference === option && styles.selected]}>
-              <Text style={[styles.controlText, preference === option && styles.selectedText]}>{avatarViewLabels[option]}</Text>
-            </Pressable>
-          ))}
+        <View testID="anatomy-view-status">
+          <Text style={styles.caption} testID={`anatomy-view-${preference}-${view}-${viewTransition.view === view && viewTransition.settled ? 'settled' : 'rotating'}`}>{preference === 'auto' ? 'Auto · ' : ''}{avatarViewLabels[view]} view</Text>
         </View>
-        <Text style={styles.caption}>{preference === 'auto' ? 'Auto · ' : ''}{avatarViewLabels[view]} view</Text>
-        <Text style={styles.label}>{execution.program ? 'Regions follow the active components' : 'Region focus'}</Text>
-        {!execution.program && <View style={styles.row}>
-          {[...anatomyFocusOptions, ...(__DEV__ ? [{ id: 'wall_angel' as const, label: 'Movement regions' }] : [])].map((option) => (
-            <Pressable key={option.id} accessibilityRole="button" accessibilityState={{ selected: focus === option.id }}
-              onPress={() => setFocus(option.id)}
-              style={[styles.control, focus === option.id && styles.selected]}>
-              <Text style={[styles.controlText, focus === option.id && styles.selectedText]}>{option.label}</Text>
-            </Pressable>
-          ))}
-        </View>}
+        {execution.program && <Text style={styles.label}>Regions follow the active components</Text>}
         <Text style={styles.caption}>Educational region focus · not a measurement of muscle activation</Text>
         {__DEV__ && preview.mode !== 'rest' && <Text style={styles.caption}>Wall reference only · contact is not simulated. Preview angles are animation settings, not a recommended range.</Text>}
         <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL('https://github.com/heatsy-app/heatsy-body-model').catch(() => {}); }}>

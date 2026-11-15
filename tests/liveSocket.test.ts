@@ -108,6 +108,23 @@ test('live provider tool travels through the real planner validator and requires
   assert.equal(plans, 3);
   const latest = messages.filter(message => message.type === 'action').at(-1)!.action as typeof movement;
   const now = Date.now();
+  const completionContext = { type: 'context', sequence: latest.sequence, playback: {
+    sequenceId: latest.sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
+  }, practiceStartedAt: null };
+  socket.send(JSON.stringify(completionContext));
+  socket.send(JSON.stringify({ type: 'clock', clientSentAt: 999 }));
+  await until(() => messages.some(message => message.type === 'clock' && message.clientSentAt === 999));
+  const invitations = () => context.filter(value => value.turns?.[0]?.parts?.[0]?.text?.startsWith('DEMONSTRATION_FINISHED'));
+  assert.equal(invitations().length, 0, 'Do not interrupt an outstanding conversation turn.');
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
+  assert.equal(invitations().length, 1);
+  assert.equal(invitations()[0].turnComplete, true);
+  assert.match(invitations()[0].turns![0].parts![0].text!, /Now try the movement yourself/);
+  socket.send(JSON.stringify(completionContext));
+  socket.send(JSON.stringify({ type: 'clock', clientSentAt: 1000 }));
+  await until(() => messages.some(message => message.type === 'clock' && message.clientSentAt === 1000));
+  assert.equal(invitations().length, 1, 'Repeated completion context cannot repeat the invitation.');
+  receive(Object.assign(new ProviderMessage(), { serverContent: { turnComplete: true } }));
   socket.send(JSON.stringify({ type: 'context', sequence: latest.sequence, playback: {
     sequenceId: latest.sequence.id, stepIndex: 1, phase: 'completed', status: 'completed', updatedAt: now,
   }, practiceStartedAt: now }));

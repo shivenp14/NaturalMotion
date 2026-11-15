@@ -13,6 +13,7 @@ import { FeedbackSpeechPolicy } from '../../src/vision/feedbackPolicy';
 import { planMovement } from './planner';
 import { geminiConnector, type ConnectConversation, type ConversationConnection } from './gemini';
 import { ToolController } from './ToolController';
+import { DemonstrationInvitation } from './demonstrationInvitation';
 
 export type LiveServerOptions = AgentServiceOptions & {
   geminiApiKey: string; conversationModel: string; geminiApiVersion?: string;
@@ -41,6 +42,8 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
     let messageWindow = Date.now();
     let messageCount = 0;
     let pendingTools = 0;
+    let conversationBusy = false;
+    const invitation = new DemonstrationInvitation();
     const pending = new Map<string, { finish(ok: boolean): void }>();
     const send = (message: LiveServerMessage) => {
       if (closed || client.readyState !== WebSocket.OPEN) return;
@@ -78,6 +81,17 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
     const lifetime = setTimeout(() => close('Live session ended after ten minutes. Start a new session.'), 600_000);
     const startTimeout = setTimeout(() => close('Live session initialization timed out.'), 10_000);
 
+    function invitePractice() {
+      const sequence = tools.currentSequence;
+      if (!provider || closed || !sequence) return;
+      const cue = invitation.take(sequence, tools.currentAssessment, playback, practiceStartedAt,
+        conversationBusy || tools.isUserSpeaking || pendingTools > 0, Date.now());
+      if (!cue) return;
+      conversationBusy = true;
+      provider.sendClientContent({ turns: [{ role: 'user', parts: [{ text:
+        `DEMONSTRATION_FINISHED ${JSON.stringify({ sequenceId: sequence.id, cue })}. Application context, not a new movement request. The avatar has finished its initial demonstration. Speak this brief invitation once. Do not invoke tools, repeat a readiness announcement, claim the user has started, or claim overall correct form. Then leave quiet space for the person to get into position.` }] }], turnComplete: true });
+    }
+
     function receiveProvider(message: GeminiMessage) {
       if (closed) return;
       try {
@@ -91,21 +105,24 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         // inputTranscription.finished is optional and absent in observed speech.
         const activity: unknown = message.voiceActivity;
         const activityType = isRecord(activity) ? activity.voiceActivityType ?? activity.type : undefined;
-        if (activityType === 'ACTIVITY_START') tools.beginSpeech();
-        if (activityType === 'ACTIVITY_END') tools.endSpeech();
+        if (activityType === 'ACTIVITY_START') { conversationBusy = true; tools.beginSpeech(); }
+        if (activityType === 'ACTIVITY_END') { conversationBusy = true; tools.endSpeech(); }
         if (content?.inputTranscription) {
+          if (content.inputTranscription.text?.trim()) conversationBusy = true;
           tools.noteInput(content.inputTranscription.text ?? '', content.inputTranscription.finished);
           if (content.inputTranscription.text) send({ type: 'transcript', role: 'user', text: content.inputTranscription.text });
         }
-        if (!suppressOutput && content?.outputTranscription?.text) send({ type: 'transcript', role: 'assistant', text: content.outputTranscription.text });
+        if (!suppressOutput && content?.outputTranscription?.text) { conversationBusy = true; send({ type: 'transcript', role: 'assistant', text: content.outputTranscription.text }); }
         for (const part of content?.modelTurn?.parts ?? []) {
           if (!suppressOutput && part.inlineData?.data && part.inlineData.mimeType?.startsWith('audio/pcm')) {
             if (!base64(part.inlineData.data, 350_000)) { close('Invalid audio received from the conversation provider.'); return; }
+            conversationBusy = true;
             send({ type: 'audio', data: part.inlineData.data });
           }
         }
         for (const id of message.toolCallCancellation?.ids ?? []) tools.cancel(id);
         for (const call of message.toolCall?.functionCalls ?? []) {
+          conversationBusy = true;
           pendingTools++;
           void tools.handle(call).then(result => {
             if (!closed) provider?.sendToolResponse({ functionResponses: [{ id: call.id, name: call.name, response: result,
@@ -116,7 +133,10 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
         // acknowledgment turn while a tool is pending is not request completion.
         // Wait for the provider's post-tool output turn, including cached calls;
         // settling a tool promise alone does not mean that response was spoken.
-        if (content?.turnComplete) { tools.finishTurn(); if (pendingTools === 0) send({ type: 'turn_complete' }); }
+        if (content?.turnComplete) {
+          tools.finishTurn();
+          if (pendingTools === 0) { conversationBusy = false; send({ type: 'turn_complete' }); invitePractice(); }
+        }
       } catch { close('The conversation response could not be processed.'); }
     }
 
@@ -152,6 +172,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             if (tools.currentAssessment && accepted && accepted.id === sequence?.id &&
               JSON.stringify(sequence.steps) !== JSON.stringify(accepted.steps)) throw new Error('Sequence context conflicts with the accepted movement.');
             tools.setSequence(sequence);
+            invitePractice();
             if (!initialized) {
               initialized = true;
               if (!options.geminiApiKey) { close('Gemini conversation provider is not configured on the backend.'); return; }
@@ -178,7 +199,7 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             provider?.sendRealtimeInput({ video: { data: input.data, mimeType: 'image/jpeg' } }); break;
           case 'text':
             if (!hasOnlyKeys(input, ['type', 'text']) || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 4000) throw new Error('Invalid text.');
-            tools.noteTextInput(input.text);
+            conversationBusy = true; tools.noteTextInput(input.text);
             provider?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: input.text }] }], turnComplete: true }); break;
           case 'applied':
             if (!hasOnlyKeys(input, ['type', 'commandId', 'ok']) || typeof input.commandId !== 'string' || typeof input.ok !== 'boolean') throw new Error('Invalid action acknowledgment.');
@@ -201,11 +222,12 @@ export function attachLiveServer(server: Server, options: LiveServerOptions) {
             const assessment = assessMeasurements(checks, measurements as Record<string, number | null>);
             const canonical = { sequenceId: sequence.id, stepIndex: playback.stepIndex,
               mode: practice ? 'practice' as const : 'demonstration' as const, observedAt: report.observedAt as number, ...assessment };
-            if (pendingTools > 0) { feedbackSpeech.shouldSpeak(null, now); break; }
+            if (pendingTools > 0 || conversationBusy || tools.isUserSpeaking) { feedbackSpeech.shouldSpeak(null, now); break; }
             const speakFeedback = feedbackSpeech.shouldSpeak(canonical, now);
             const key = JSON.stringify([sequence.id, playback.stepIndex, canonical.mode, assessment.status, assessment.checkId, assessment.message]);
             if (!speakFeedback && key === lastFeedbackContext) break;
             lastFeedbackContext = key;
+            if (speakFeedback) conversationBusy = true;
             provider?.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `DETERMINISTIC_FORM_STATUS ${JSON.stringify({
               ...canonical,
             })}. This is application context, not a new user request. Do not invoke movement tools.${speakFeedback ? ' Speak the supplied message once, using its exact words. Do not add a broader form or safety judgment.' : ' Retain as context; no spoken update is requested.'}` }] }], turnComplete: speakFeedback });

@@ -230,7 +230,7 @@ export function LiveCoachScreen() {
           <Text style={styles.note}>Mic packets: {stats.microphone} · Camera samples: {stats.images} · Mic level: {stats.peak.toFixed(3)}{mode === 'local' ? ' · LOCAL TEST' : ''}</Text>
         </>}
         <AnatomyViewport sequence={practiceView.sequence ?? session.sequence} paused={session.paused}
-          viewPreference={session.avatarView} onViewPreferenceChange={session.setAvatarView}
+          viewPreference={session.avatarView}
           automaticView={plannedAvatarView(session.presentationPlan, session.sequence, activePlayback?.stepIndex ?? 0)}
           onPlaybackChange={recordPlayback} showLab={false} compact />
         {session.assessmentPlan?.checks.length ? <Text testID={practiceView.startedAt === null ? 'live-practice-waiting' : 'live-practice-active'} style={styles.note}>{practiceView.startedAt === null ? 'After watching, hold the starting arm position to begin practice automatically.' : 'Follow the movement. The camera checks the selected arm positions while you practice.'}</Text> : null}

@@ -6,6 +6,7 @@ import type { LiveServerMessage } from '../src/live/protocol';
 import { LiveCompletion } from './liveCompletion';
 import { validateAssessmentPlan } from '../src/vision/assessmentPlan';
 import { isAvatarViewPreference, validatePresentationPlan } from '../src/shared/presentation';
+import type { MovementSequence } from '../src/shared/contracts';
 
 const address = new URL(process.env.AGENT_TEST_BASE_URL ?? 'http://127.0.0.1:3001');
 address.protocol = address.protocol === 'https:' ? 'wss:' : 'ws:'; address.pathname = '/live';
@@ -13,16 +14,20 @@ const socket = new WebSocket(address);
 let accepted = false;
 let audioChunks = 0;
 let finished = false;
-const completion = new LiveCompletion();
+let completion = new LiveCompletion();
+let acceptedSequence: MovementSequence | null = null;
+let awaitingInvitation = false;
+let invitationText = '';
 const args = process.argv.slice(2);
 const expectNoMovement = args.includes('--expect-no-movement');
+const expectInvitation = args.includes('--expect-invitation');
 const viewIndex = args.indexOf('--expect-view');
 const expectedView = viewIndex >= 0 ? args[viewIndex + 1] : undefined;
 if (viewIndex >= 0 && !isAvatarViewPreference(expectedView)) throw new Error('--expect-view requires front, back, side, left_side or auto.');
 const audioIndex = args.indexOf('--audio-pcm');
 const audioPath = audioIndex >= 0 ? args[audioIndex + 1] : undefined;
 if (audioIndex >= 0 && !audioPath) throw new Error('--audio-pcm requires a PCM16 little-endian, 16 kHz mono file.');
-const request = args.filter((arg, index) => arg !== '--expect-no-movement' && index !== audioIndex && (audioIndex < 0 || index !== audioIndex + 1) &&
+const request = args.filter((arg, index) => !['--expect-no-movement', '--expect-invitation'].includes(arg) && index !== audioIndex && (audioIndex < 0 || index !== audioIndex + 1) &&
   index !== viewIndex && (viewIndex < 0 || index !== viewIndex + 1)).join(' ');
 const timeout = setTimeout(() => finish('Live smoke test timed out.'), 60_000);
 function finish(error?: string) {
@@ -59,7 +64,9 @@ socket.on('message', data => {
         'Please demonstrate one wall angel up and back, slowly, and finish in a goalpost position.' }));
     }
     if (event.type === 'audio') audioChunks++;
+    if (awaitingInvitation && event.type === 'transcript' && event.role === 'assistant') invitationText += event.text;
     if (event.type === 'action') {
+      if (awaitingInvitation) { finish('Practice invitation must not invoke another action.'); return; }
       if (expectedView) {
         if (event.action.type !== 'set_avatar_view' || event.action.view !== expectedView) { finish('Expected a view-only action; movement must not restart.'); return; }
         accepted = true; console.log(`Validated view-only action: ${event.action.view}.`);
@@ -76,8 +83,22 @@ socket.on('message', data => {
       console.log(`Validated ${assessment.checks.length} movement-matched assessment checks.`);
       console.log(`Renderer compiler accepted ${program.segments.length} groups, ${program.durationSeconds}s. Host protocol test acknowledges acceptance; no body is rendered by this script.`);
       accepted = true;
+      acceptedSequence = event.action.sequence;
       socket.send(JSON.stringify({ type: 'applied', commandId: event.commandId, ok: true }));
     }
-    if (completion.update(event) && (accepted || expectNoMovement)) finish();
+    if (completion.update(event) && (accepted || expectNoMovement)) {
+      if (expectInvitation && !awaitingInvitation) {
+        if (!acceptedSequence) { finish('Invitation test requires a movement.'); return; }
+        awaitingInvitation = true; completion = new LiveCompletion();
+        console.log('Host protocol test now simulates renderer completion; it does not render a body or verify a person.');
+        socket.send(JSON.stringify({ type: 'context', sequence: acceptedSequence, playback: {
+          sequenceId: acceptedSequence.id, stepIndex: acceptedSequence.steps.length - 1, phase: 'completed', status: 'completed', updatedAt: Date.now(),
+        }, practiceStartedAt: null }));
+        return;
+      }
+      if (expectInvitation && !/try|your turn|give .*go/i.test(invitationText)) { finish('Expected an invitation to perform the movement.'); return; }
+      if (expectInvitation) console.log(`Practice invitation transcript: ${invitationText.trim()}`);
+      finish();
+    }
   } catch { finish('Live response or generated movement failed validation.'); }
 });

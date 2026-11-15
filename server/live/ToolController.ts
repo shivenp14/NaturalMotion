@@ -33,6 +33,7 @@ export class ToolController {
   constructor(private readonly options: Options) {}
   get currentSequence() { return this.sequence; }
   get currentAssessment() { return this.assessment; }
+  get isUserSpeaking() { return this.inputOpen; }
   setSequence(sequence: MovementSequence | null) {
     // Identical accepted context retains its compiled assessment cache.
     if (this.assessment && sequence?.id === this.sequence?.id) return;
