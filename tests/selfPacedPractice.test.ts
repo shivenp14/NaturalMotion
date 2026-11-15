@@ -197,3 +197,26 @@ test('practice evidence validation rejects stale, fabricated and out-of-order da
   assert.throws(() => validatePracticeAttempt(input, sequence.id, input.endedAt + 20000));
 });
 
+
+test('consistent visible differences near tolerance get a correction, not a visibility retry loop', () => {
+  for (const offset of [-24, 24, 27]) {
+    const input = attempt(4000, row => { row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + offset; });
+    const review = reviewPracticeAttempt(sequence, plan, input);
+    assert.equal(review.status, 'needs_adjustment', `Stable ${offset} degree difference`);
+    assert.equal(review.checkId, 'left_elbow_bend');
+    assert.match(review.message, offset < 0 ? /more bent/ : /straighter/);
+    assert.match(review.message, /ready to try again/);
+    assert.equal(reviewPracticeAttempt(sequence, plan, attempt(4000), review).status, 'aligned');
+  }
+});
+
+test('inconsistent borderline measurements remain uncertain without blaming visibility', () => {
+  let index = 0;
+  const input = attempt(4000, row => {
+    row.measurements.left_elbow_bend = row.measurements.left_elbow_bend! + (index++ % 5 < 3 ? 24 : -10);
+  });
+  const review = reviewPracticeAttempt(sequence, plan, input);
+  assert.equal(review.status, 'not_observable');
+  assert.match(review.message, /measurements varied/);
+  assert.doesNotMatch(review.message, /arms fully visible/);
+});

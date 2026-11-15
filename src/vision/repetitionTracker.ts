@@ -136,6 +136,7 @@ export function reviewPracticeAttempt(sequence: MovementSequence, plan: Assessme
   const activeChecks = plan.checks.filter(check => tracker.drivers[check.stepIndex].length > 0);
   if (!activeChecks.length) return { ...base, status: 'unavailable', message: 'This demonstration has no supported checks for the moving part of the repetition.' };
   const problems: { check: AssessmentCheck; error: number; score: number }[] = [];
+  let inconsistent = false;
   for (const check of activeChecks) {
     const rows = tracker.evidence.filter(row => row.step === check.stepIndex);
     const errors = rows.flatMap(row => {
@@ -147,17 +148,23 @@ export function reviewPracticeAttempt(sequence: MovementSequence, plan: Assessme
     if (errors.length < 4 || errors.length / Math.max(1, rows.length) < 0.7 || bins.size < 3) return {
       ...base, status: 'not_observable', message: 'I could not see the whole arm movement clearly enough to judge it. Try again with both arms and hips in view.' };
     const error = median(errors.map(row => row.error));
-    const persistent = errors.filter(row => Math.abs(row.error) > check.toleranceDeg + 8).length / errors.length;
-    if (Math.abs(error) > check.toleranceDeg + 8 && persistent >= 0.65) problems.push({ check, error, score: Math.abs(error) / check.toleranceDeg });
-    else if (Math.abs(error) > check.toleranceDeg) return { ...base, status: 'not_observable', message: 'The camera estimate was too uncertain for a confident form judgment. Try once more with your arms fully visible.' };
+    // Confidence comes from agreement across samples, not the size of a form
+    // difference. A stable 21–28 degree error used to fall into an uncertainty
+    // dead zone above a 20 degree tolerance, despite complete visible evidence.
+    const persistent = errors.filter(row => Math.sign(row.error) === Math.sign(error) && Math.abs(row.error) > check.toleranceDeg).length / errors.length;
+    if (Math.abs(error) > check.toleranceDeg) {
+      if (persistent >= 0.65) problems.push({ check, error, score: Math.abs(error) / check.toleranceDeg });
+      else inconsistent = true;
+    }
   }
   const problem = problems.sort((a, b) => b.score - a.score)[0];
   if (problem) {
     const { check, error } = problem;
     const cue = check.metric === 'elbow_bend' ? `keep your ${check.side} elbow ${error < 0 ? 'a little more bent' : 'a little straighter'} as your arm moves` :
       check.metric === 'upper_arm_elevation' ? `match the ${check.side} upper-arm position more closely` : `match the direction of your ${check.side} forearm more closely`;
-    return { ...base, checkId: assessmentCheckId(check), status: 'needs_adjustment', message: `For the next repetition, ${cue}.` };
+    return { ...base, checkId: assessmentCheckId(check), status: 'needs_adjustment', message: `For the next repetition, ${cue}. Say “I’m ready to try again” before you start.` };
   }
+  if (inconsistent) return { ...base, status: 'not_observable', message: 'The arm measurements varied too much for a reliable review. Keep the phone still and face it directly for the next attempt.' };
   if (tracker.reducedRange) return { ...base, status: 'needs_adjustment', message: 'You completed the return, but used a smaller movement than the demonstration. On the next repetition, follow the demonstrated path only as far as feels comfortable.' };
   const fullCoverage = activeChecks.length === tracker.activeSteps.length * 6;
   const improved = previous?.sequenceId === sequence.id && previous.status === 'needs_adjustment';
